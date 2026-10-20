@@ -36,9 +36,10 @@ H.eq(#H.leaked, 0, "no accidental globals", table.concat(H.leaked, ", "))
 -- THE API BEFORE LOGIN (playbook 5a): every call answers nil, "not ready" and none errors.
 do
     local A = _G.NebbinatorAPI
-    H.ok(type(A) == "table" and A.major == 1 and A.version == 1, "NebbinatorAPI is major 1, version 1")
+    H.ok(type(A) == "table" and A.major == 1 and A.version == 2, "NebbinatorAPI is major 1, version 2")
     H.eq(A.Ready(), false, "(api) not ready before login")
-    for _, fname in ipairs({ "Recruits", "Recruit", "CountNew", "Ad", "Status", "Open" }) do
+    for _, fname in ipairs({ "Recruits", "Recruit", "CountNew", "Ad", "Status", "Open",
+                             "Team", "IsProspect", "Needs", "IsOfficer", "Stats" }) do
         local ok, got, why = pcall(A[fname], fname == "Recruit" and "Dps4" or nil)
         H.ok(ok, "(api) " .. fname .. " does not error before login", got)
         H.eq(got, nil, "(api) " .. fname .. " answers nil before login")
@@ -1799,6 +1800,43 @@ end)()
     NS.db.responders = {}
     MB:Update()
     H.eq(b.opts.tooltip[1], "nobody new waiting", "and says when nobody does")
+
+    H.section("NebbinatorAPI version 2: the guild's")
+    local A = _G.NebbinatorAPI
+    NS.db.team = { Pros = { name = "Pros", status = "contacted", by = "Grunt", at = now - 50 },
+                   Joined = { name = "Joined", status = "accepted", by = "Grunt", at = now - 10 } }
+    local team = A.Team()
+    H.ok(#team == 2 and team[1].name == "Joined", "(api) Team: the list, newest first")
+    team[1].status = "edited"
+    H.eq(NS.db.team.Joined.status, "accepted", "(api) ...a copy")
+    local yes, by, status, at = A.IsProspect("Pros-Dreamscythe")
+    H.ok(yes == true and by == "Grunt" and status == "contacted" and at == now - 50, "(api) IsProspect: who, how far, when")
+    H.eq(A.IsProspect("Joined"), false, "(api) a guildmate now is not a prospect")
+    local _, why = A.IsProspect(nil)
+    H.eq(why, "no name", "(api) IsProspect without a name says so")
+    NS.db.needs.shaman.resto, NS.db.needsBy, NS.db.needsAt = 2, "Officerton", now
+    local needs = A.Needs()
+    H.ok(needs.text == "2 Resto Shaman" and needs.by == "Officerton" and needs.list[1].classFile == "SHAMAN"
+         and needs.list[1].role == "HEALER" and needs.list[1].count == 2, "(api) Needs: the line, who set it, the list", needs.text)
+    NS.db.needs.shaman.resto, NS.db.needsBy, NS.db.needsAt = 0, nil, nil
+    H.eq(A.IsOfficer(), false, "(api) IsOfficer: a member is not")
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 0 } }
+    NS.Responders.rosterDirty = true
+    H.eq(A.IsOfficer(), true, "(api) the guild master is")
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+    NS.Responders.rosterDirty = true
+    NS.db.stats = { posts = { { at = now, where = "Trade", tpl = "Short", whispers = 2 } } }
+    local st = A.Stats()
+    H.ok(st.posts == 1 and st.whispers == 2 and st.where[1].key == "Trade" and st.ad[1].key == "Short", "(api) Stats: what works")
+    NS.db.stats = { posts = {} }
+    local heardTeam
+    A.RegisterCallback("suite", "Nebbinator_TeamChanged", function(_, name) heardTeam = name end)
+    NS.Team.Took("Grunt", "Newbie", "new", "", "", "Grunt", tostring(now), "")
+    H.eq(heardTeam, "Newbie", "(api) TeamChanged fires with the name")
+    A.UnregisterCallback("suite", "Nebbinator_TeamChanged")
+    H.ok(A.Open("Team") and UI:ShownTab() == "Team", "(api) Open(\"Team\")")
+    UI:Hide()
+    NS.db.team = {}
 end)()
 
 H.report()

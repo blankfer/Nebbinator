@@ -39,10 +39,32 @@
 --                                       of the last real post this session or nil,
 --                                       recruits = n, new = n }. nil, "not ready"
 --
+-- THE GUILD'S (since version 2, 21 Oct 2026). Everything below is the guild THIS character is in: the
+-- save is the account's, and Nebbinator keeps one book per guild (Core/Fence.lua) - an alt in another
+-- guild answers about its own guild, never the main's.
+--   NebbinatorAPI.Team()           -> the guild's list of prospects, newest first: { name, status, by (who
+--                                     is talking to them), at, class = "MAGE" | nil, level = n | nil,
+--                                     note = | nil } - class, level and note only on an officer's client
+--                                     (summary only, never what a recruit whispered). nil, "not ready"
+--   NebbinatorAPI.IsProspect(name) -> true, by, status, at when somebody in the guild is talking to them
+--                                     (not joined, not declined, touched in the last 30 days); else false.
+--                                     nil, "not ready" | "no name"
+--   NebbinatorAPI.Needs()          -> { text = "2 Resto Shaman, 1 Bear Druid", by = officer | nil,
+--                                       at = when | nil, list = { { classFile = "SHAMAN", class = "Shaman",
+--                                       spec = "Resto", role = "TANK" | "HEALER" | "DPS", count = n }, ... } }
+--                                     nil, "not ready"
+--   NebbinatorAPI.IsOfficer(name)  -> whether that guildmate (default: you) sets the needs - guild ranks
+--                                     0..officerRank. nil, "not ready"
+--   NebbinatorAPI.Stats()          -> what works: { posts = n, whispers = n, where = { { key, posts,
+--                                     whispers }, ... }, ad = { ... }, when = { ... } } best first.
+--                                     nil, "not ready"
+--
 -- Actions (since version 1) - only what a player's click does:
---   NebbinatorAPI.Open(page)       -> opens the window; `page` (optional) is "Recruit" | "Message" |
---                                     "Replies" | "About" and rolls the book out on it. Answers true,
---                                     or nil, "not ready" | "no such page" | "failed"
+--   NebbinatorAPI.Open(page)       -> opens the window; `page` (optional) is "Desk" | "Team" | "Stats" |
+--                                     "Recruit" | "Message" | "Replies" | "About" (Team and Stats since
+--                                     version 2). Answers true, or nil, "not ready" | "no such page" | "failed"
+--                                     Setting the guild's needs is an officer's click on the Team page:
+--                                     Open("Team") - this API never sends anything to the guild.
 --
 -- Events (since version 1):
 --   NebbinatorAPI.RegisterCallback(owner, event, fn) -> true, or nil, "bad callback" | "no such event"
@@ -51,10 +73,12 @@
 --   the first. fn(event, ...) is called inside a pcall, so an error in it never reaches Nebbinator.
 --   "Nebbinator_NewRecruit"  (event, name, source)  somebody new landed on the desk
 --   "Nebbinator_Whisper"     (event, name, text)    a recruit whispered (the first whisper too)
+--   "Nebbinator_TeamChanged" (event, name)          the guild's list changed about them   (version 2)
+--   "Nebbinator_NeedsChanged" (event, by)           an officer's needs arrived             (version 2)
 --------------------------------------------------------------------------------
 local _, NS = ...
 
-local API = { major = 1, version = 1 }
+local API = { major = 1, version = 2 }
 NebbinatorAPI = API
 
 local function Now()
@@ -187,9 +211,90 @@ function API.Open(page)
 end
 
 --------------------------------------------------------------------------------
+-- the guild's (version 2)
+--------------------------------------------------------------------------------
+
+local function TeamReady()
+  local db, why = DB()
+  if not db then return nil, why end
+  if not (NS.Team and NS.Team.List) then return nil, "not ready" end
+  return db
+end
+
+function API.Team()
+  local db, why = TeamReady()
+  if not db then return nil, why end
+  local out = {}
+  for key, row in pairs(NS.Team.List()) do
+    if type(row) == "table" then
+      out[#out + 1] = { name = row.name or key, status = row.status, by = row.by, at = row.at,
+                        class = row.class, level = row.level, note = row.note }
+    end
+  end
+  table.sort(out, function(a, b)
+    if (a.at or 0) == (b.at or 0) then return tostring(a.name) < tostring(b.name) end
+    return (a.at or 0) > (b.at or 0)
+  end)
+  return out
+end
+
+function API.IsProspect(name)
+  local db, why = TeamReady()
+  if not db then return nil, why end
+  if type(name) ~= "string" or name == "" then return nil, "no name" end
+  local ok, by, status = NS.Team.Prospect(name)
+  if not ok then return false end
+  local row = NS.Team.List()[NS.Util.StripRealm(name)]
+  return true, by, status, row and row.at
+end
+
+function API.Needs()
+  local db, why = TeamReady()
+  if not db then return nil, why end
+  local list = {}
+  for _, class in ipairs(NS.CLASSES or {}) do
+    for _, spec in ipairs(class.specs) do
+      local n = tonumber(db.needs[class.key] and db.needs[class.key][spec.key]) or 0
+      if n > 0 then
+        list[#list + 1] = { classFile = class.file, class = class.name, spec = spec.name, role = spec.role, count = n }
+      end
+    end
+  end
+  local ok, text = pcall(NS.Message.NeedsText, NS.Message, false)
+  return { text = ok and text or "", by = db.needsBy, at = db.needsAt, list = list }
+end
+
+function API.IsOfficer(name)
+  local db, why = TeamReady()
+  if not db then return nil, why end
+  local ok, yes = pcall(NS.Team.IsOfficer, name)
+  return ok and yes and true or false
+end
+
+function API.Stats()
+  local db, why = DB()
+  if not db then return nil, why end
+  if not (NS.Stats and NS.Stats.Summary) then return nil, "not ready" end
+  local ok, sum = pcall(NS.Stats.Summary)
+  if not ok or type(sum) ~= "table" then return nil, "failed" end
+  local function rows(t)
+    local out = {}
+    for key, b in pairs(t or {}) do out[#out + 1] = { key = key, posts = b.posts, whispers = b.whispers } end
+    table.sort(out, function(a, b)
+      local ra, rb = a.whispers / math.max(1, a.posts), b.whispers / math.max(1, b.posts)
+      if ra ~= rb then return ra > rb end
+      return tostring(a.key) < tostring(b.key)
+    end)
+    return out
+  end
+  return { posts = sum.posts, whispers = sum.whispers, where = rows(sum.where), ad = rows(sum.tpl), when = rows(sum.part) }
+end
+
+--------------------------------------------------------------------------------
 -- Events: a small table of owners, a pcall per call, no library.
 --------------------------------------------------------------------------------
-local EVENTS = { Nebbinator_NewRecruit = true, Nebbinator_Whisper = true }
+local EVENTS = { Nebbinator_NewRecruit = true, Nebbinator_Whisper = true,
+                 Nebbinator_TeamChanged = true, Nebbinator_NeedsChanged = true }
 local owners = {}     -- [event] = { [owner] = fn }
 
 function API.RegisterCallback(owner, event, fn)
