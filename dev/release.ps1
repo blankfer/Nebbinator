@@ -56,6 +56,7 @@ $canon = @{
     "Libs\LibBiSComm-1.0\LibBiSComm-1.0.lua" = "..\_bisdev\LibBiSComm-1.0\LibBiSComm-1.0.lua"
     "Libs\BiSTheme\Console.lua"              = "..\BiSTheme\Console.lua"
     "Libs\BiSTheme\Options.lua"              = "..\BiSTheme\Options.lua"
+    "Libs\BiSTheme\Minimap.lua"              = "..\BiSTheme\Minimap.lua"
 }
 foreach ($k in $canon.Keys) {
     $mine = Join-Path $Root $k
