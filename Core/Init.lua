@@ -116,8 +116,12 @@ local function Defaults()
         remind     = 15,           -- minutes after a post to remind you, in a city (0 = never)
         stats      = { posts = {}, whispers = {} },   -- what works (Core/Stats.lua)
         officerRank = 1,           -- guild ranks 0..this are officers (BiS Guild's rule, the same number)
+        team       = {},           -- the guild's list of prospects (Core/Team.lua)
+        guilds     = {},           -- every other guild's book, parked (Core/Fence.lua)
     }
 end
+
+NS.Defaults = Defaults          -- Core/Fence.lua fills a new guild's book from these
 
 --------------------------------------------------------------------
 -- Boot
@@ -276,6 +280,7 @@ end
 
 function NS:Initialize()
     self:LoadDB()
+    NS.Fence.Settle()                       -- this guild's book live, nobody else's (Core/Fence.lua)
 
     NS.Message:Initialize()
     NS.Responders:Initialize()

@@ -15,6 +15,7 @@ Libs\LibBiSComm-1.0\LibBiSComm-1.0.lua
 
 Core\Util.lua
 Core\Init.lua
+Core\Fence.lua
 Core\Message.lua
 Core\Responders.lua
 Core\Team.lua

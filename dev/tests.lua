@@ -1666,4 +1666,86 @@ end)()
     R.rosterDirty = true
 end)()
 
+-- FENCED INTO THE GUILD (Arn, 21 Oct 2026): the save is the account's; an alt in another guild must never
+-- see, use or share the main's guild's book.
+;(function()
+    local F, T, R, Sc = NS.Fence, NS.Team, NS.Responders, NS.Scout
+    local now = os.time()
+    local MAIN, ALT = "The Heathens-Dreamscythe", "Alt Guild-Dreamscythe"
+
+    H.section("the fence: the book is the guild's")
+    H.eq(NS.db.guildKey, MAIN, "after login the live book is the guild this character is in")
+    H.ok(F.Ready(), "and the fence is open")
+    NS.db.needs.shaman.resto = 2
+    NS.db.discord = "discord.gg/heathens"
+    NS.db.responders = { Mainrecruit = { name = "Mainrecruit", status = "contacted", timestamp = now, messages = {} } }
+    NS.db.team = { Mainprospect = { name = "Mainprospect", status = "contacted", by = "Kumlust", at = now } }
+    local templates = NS.db.templates
+
+    H.section("the fence: an alt in another guild")
+    H.myGuild = "Alt Guild"
+    F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
+    H.eq(NS.db.guildKey, ALT, "the alt's guild is live now")
+    H.ok(NS.db.needs.shaman.resto == 0 and NS.db.discord == "", "with its own needs and Discord - fresh, not the main's")
+    H.ok(next(NS.db.responders) == nil and next(NS.db.team) == nil, "an empty desk and an empty guild list")
+    H.eq((T.Prospect("Mainprospect")), false, "the main's prospect is nobody here")
+    H.ok(not NS.Message:Build():find("heathens", 1, true), "the ad carries no Heathens Discord", NS.Message:Build())
+    H.eq(NS.db.templates, templates, "the templates are the account's: the same ones")
+    H.eq(NS.db.guilds[MAIN].discord, "discord.gg/heathens", "the main's book is parked, whole")
+    H.ok(NS.db.guilds[MAIN].responders.Mainrecruit, "desk and all")
+    -- an alt-guild officer asks for everyone's desk: the main's recruits are not in the answer
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 }, { name = "Altofficer-Dreamscythe", rank = 0 } }
+    R.rosterDirty = true
+    _G.LibBiSComm.outbox = {}
+    H.wire = {}
+    T.OnAsk("Altofficer", "R")
+    local leaked = false
+    for _, w in ipairs(_G.LibBiSComm.outbox) do if w.msg:find("Mainrecruit", 1, true) then leaked = true end end
+    for _, w in ipairs(H.wire) do if w.msg:find("Mainrecruit", 1, true) then leaked = true end end
+    H.ok(not leaked, "an alt-guild officer's ASK gets nothing of the main's desk")
+    H.inParty = true
+    H.raid = { { name = "Kumlust" }, { name = "Shammy", class = "SHAMAN" } }
+    NS.db.scoutSeen = {}
+    H.eq(Sc.Check(), 0, "the scout uses the alt guild's needs (none): no card for the main's resto shaman")
+    H.inParty, H.raid = false, { { name = "Kumlust" } }
+    NS.db.discord = "discord.gg/altguild"
+
+    H.section("the fence: back on the main")
+    H.myGuild = "The Heathens"
+    F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
+    H.ok(NS.db.guildKey == MAIN and NS.db.discord == "discord.gg/heathens" and NS.db.needs.shaman.resto == 2,
+         "the main's book comes back as it was")
+    H.ok(NS.db.responders.Mainrecruit and NS.db.team.Mainprospect, "desk and guild list too")
+    H.eq(NS.db.guilds[ALT].discord, "discord.gg/altguild", "and the alt's is parked")
+    H.eq(NS.db.guilds[MAIN], nil, "a live book is never also parked")
+
+    H.section("the fence: shut until the game says which guild")
+    F.ready = false
+    H.guildLate = true
+    H.ok(not F.Settle(), "in a guild, but GetGuildInfo answers nil yet: not settled")
+    H.eq(T.Changed({ name = "Early", status = "new" }), false, "nothing is shared")
+    H.eq(T.Took("Grunt", "Early", "new", "", "", "Grunt", tostring(now), ""), nil, "nothing is taken")
+    H.ok(not T.Adopt("Officerton", now + 99, "warrior.prot=3"), "no needs are adopted")
+    H.eq(Sc.Check(), 0, "no scout cards")
+    H.guildLate = nil
+    F.frame:Fire("OnEvent", "GUILD_ROSTER_UPDATE")
+    H.ok(F.Ready() and NS.db.guildKey == MAIN, "the roster comes: the fence opens on the right book")
+    local swaps = F.swapped
+    H.myGuild = "Elsewhere"
+    F.frame:Fire("OnEvent", "GUILD_ROSTER_UPDATE")
+    H.eq(F.swapped, swaps, "once settled, the roster's chatter is not looked at (only PLAYER_GUILD_UPDATE)")
+    H.myGuild = nil
+    F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
+    H.eq(NS.db.guildKey, "-", "left the guild: a book of its own, not the old guild's")
+    H.myGuild, H.myGuildRealm = "The Heathens", "Otherrealm"
+    F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
+    H.eq(NS.db.guildKey, "The Heathens-Otherrealm", "the same name on another realm is another guild")
+    H.myGuildRealm = nil
+    F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
+    H.eq(NS.db.guildKey, MAIN, "and home again")
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+    R.rosterDirty = true
+    NS.db.needs.shaman.resto = 0
+end)()
+
 H.report()

@@ -384,12 +384,16 @@ _G.UnitLevel = function() return 70 end
 _G.GetRealmName = function() return "Dreamscythe" end
 _G.UnitFactionGroup = function() return "Alliance" end
 -- nil for a groupmate without a guild (the client's answer), ours for the player and any other unit
+-- H.myGuild: this character's guild (nil = none); H.guildLate: in one, but the game has not said which yet
+-- (the client answers nil for a few seconds after login). H.myGuildRealm: a guild from another realm.
+H.myGuild = "The Heathens"
 _G.GetGuildInfo = function(unit)
     local m = unit and unit ~= "player" and H.Member(unit)
     if m then return m.guild end
-    return "The Heathens"
+    if not H.myGuild or H.guildLate then return nil end
+    return H.myGuild, "Member", 4, H.myGuildRealm
 end
-_G.IsInGuild = function() return true end
+_G.IsInGuild = function() return H.myGuild ~= nil end
 -- the roster: name-realm, rank name, rank index (0 = guild master) - as the client answers
 H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
 H.RANKS = { [0] = "Guild Master", "Officer", "Veteran", "Raider", "Member" }

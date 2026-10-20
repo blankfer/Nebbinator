@@ -67,7 +67,7 @@ end
 --- The group, looked at once it has settled. Answers how many cards it raised.
 function S.Check()
     S.armed = nil
-    if not NS.db.scout then return 0 end
+    if not NS.db.scout or not NS.Fence.Ready() then return 0 end
     local raid = IsInRaid and IsInRaid()
     local n = (GetNumGroupMembers and plain(GetNumGroupMembers())) or 0
     local cards = 0

@@ -70,6 +70,7 @@ end
 --- A desk row changed here: tell the guild (REC). Called by Responders on every change that matters.
 function T.Changed(entry)
     if type(entry) ~= "table" or not entry.name then return false end
+    if not NS.Fence.Ready() then return false end                   -- which guild's? not known yet
     -- my own copy first, so the officer who is also the recruiter sees it at once
     T.Took(T.Me(), entry.name, entry.status, entry.class, entry.level, T.Me(), entry.timestamp or time(), entry.note)
     local lib = Lib()
@@ -81,6 +82,7 @@ end
 --- A REC heard (or our own): kept in full by an officer, as a prospect by everyone else.
 function T.Took(sender, name, status, class, level, by, at, note)
     if type(name) ~= "string" or name == "" then return nil end
+    if not NS.Fence.Ready() then return nil end
     local key = U.StripRealm(name)
     local L = T.List()
     local old = L[key]
@@ -147,6 +149,7 @@ end
 
 --- An officer sets the needs for the guild. Answers true, or nil and why.
 function T.SetNeeds(needs, quiet)
+    if not NS.Fence.Ready() then return nil, "the guild is not known yet" end
     if not T.IsOfficer() then return nil, "officers only" end
     local stamp = (GetServerTime and GetServerTime()) or time()
     local line = T.Pack(needs or db().needs)
@@ -160,6 +163,7 @@ end
 --- Needs heard from an officer: the newest wins, and the ad follows.
 function T.Adopt(sender, stamp, line)
     stamp = tonumber(stamp)
+    if not NS.Fence.Ready() then return false end
     if not stamp or not T.IsOfficer(sender) then return false end
     if stamp <= (tonumber(db().needsAt) or 0) then return false end
     db().needs = T.Unpack(line)
@@ -177,6 +181,7 @@ end
 function T.OnAsk(sender, what)
     local lib = Lib()
     if not (lib and lib.SendTo) or U.StripRealm(sender) == T.Me() then return end
+    if not NS.Fence.Ready() then return end
     if what == "N" and T.IsOfficer() and db().needsAt then
         -- the newest needs this officer knows, after a moment (another officer may answer first)
         local at = db().needsAt
@@ -208,9 +213,17 @@ function T.Boot()
     lib:RegisterHandler(T.MOD, "ASK", function(sender, what) T.OnAsk(sender, what) end)
     T.Tidy()
     -- a moment after login: the guild's needs, and (an officer) everyone's desk
-    C_Timer.After(10, function()
+    -- (and only once the fence knows which guild this is: a few tries, then it waits for the next login)
+    local tries = 0
+    local function ask()
         if not (IsInGuild and IsInGuild() and lib.SendTo) then return end
+        if not NS.Fence.Ready() then
+            tries = tries + 1
+            if tries < 6 then C_Timer.After(10, ask) end
+            return
+        end
         lib:SendTo("GUILD", T.MOD, "ASK", "N")
         if T.IsOfficer() then lib:SendTo("GUILD", T.MOD, "ASK", "R") end
-    end)
+    end
+    C_Timer.After(10, ask)
 end
