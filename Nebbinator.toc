@@ -17,9 +17,13 @@ Core\Util.lua
 Core\Init.lua
 Core\Message.lua
 Core\Responders.lua
+Core\Team.lua
+Core\Stats.lua
+Core\Scout.lua
 API.lua
 
 UI\Kit.lua
+UI\Cards.lua
 UI\Window.lua
 UI\SendBar.lua
 UI\Desk.lua

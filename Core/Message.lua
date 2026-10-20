@@ -40,6 +40,7 @@ function M:Flush()
     local now, sent = GetTime(), 0
     local list = self.queue
     self.queue = {}
+    if NS.Cards then NS.Cards.Done("held") end
     for _, w in ipairs(list) do
         if now - w.at <= self.FLUSH_FOR then
             self:SendWhisper(w.name, w.text)
@@ -155,13 +156,30 @@ function M:Tokens()
         healers        = tostring(healers),
         dps            = tostring(dps),
         total          = tostring(tanks + healers + dps),
+        nextraid       = self:NextRaid(),
     }
+end
+
+--- {nextraid}: the raid pasted into BiS Guild ("Wed 20:00"), or "" without one (or without BiS Guild).
+function M:NextRaid()
+    local api = _G.BiSGuildAPI
+    if not (api and api.RaidNight) then return "" end
+    local ok, e = pcall(api.RaidNight)
+    if not ok or type(e) ~= "table" then return "" end
+    local now = (GetServerTime and GetServerTime()) or time()
+    if tonumber(e.start) then
+        if e.start < now - 4 * 3600 then return "" end            -- over: not an invitation any more
+        if e.start - now < 6 * 86400 then
+            return date("%a", e.start) .. " " .. (e.time or date("%H:%M", e.start))
+        end
+    end
+    return U.Trim(((e.date or "") .. " " .. (e.time or "")))
 end
 
 NS.TOKEN_HELP = {
     "{needs}", "{needs:short}", "{times}", "{times:full}", "{guild}",
     "{discord}", "{content}", "{tanks}", "{healers}", "{dps}", "{total}",
-    "{pre}", "{post}", "{player}", "{level}", "{realm}", "{faction}",
+    "{pre}", "{post}", "{player}", "{level}", "{realm}", "{faction}", "{nextraid}",
 }
 
 --------------------------------------------------------------------
@@ -372,6 +390,10 @@ function M:SendWhisper(playerName, text)
         -- held, not lost: sent the moment the game allows it (M:Flush)
         self.queue[#self.queue + 1] = { name = playerName, text = text, at = GetTime() }
         NS.Say(playerName .. " - held until the game allows chat", "gold")
+        if NS.Cards then
+            NS.Cards.Working("held", ("%d WHISPER%s WAITING"):format(#self.queue, #self.queue == 1 and "" or "S"),
+                "the game is holding chat back here - they go the moment it lets them")
+        end
         if not self.flushing then
             self.flushing = true
             C_Timer.After(self.FLUSH_EVERY, function() M:Flush() end)

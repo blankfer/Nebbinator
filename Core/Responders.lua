@@ -52,12 +52,21 @@ end
 
 function R:RefreshGuildRoster()
     wipe(self.guildRoster)
+    self.guildRanks = {}            -- name -> rank index (0 = guild master), for Team.IsOfficer
     local total = GetNumGuildMembers and GetNumGuildMembers() or 0
     for i = 1, total do
-        local name = GetGuildRosterInfo(i)
-        if name then self.guildRoster[U.StripRealm(name):lower()] = true end
+        local name, _, rankIndex = GetGuildRosterInfo(i)
+        if name and not U.Hidden(name) then
+            local key = U.StripRealm(name):lower()
+            self.guildRoster[key] = true
+            if type(rankIndex) == "number" and not U.Hidden(rankIndex) then self.guildRanks[key] = rankIndex end
+        end
     end
 end
+
+-- the guild hears about a desk row that changed (Core/Team.lua); free when there is no team
+local function Share(entry) if NS.Team and NS.Team.Changed then NS.Team.Changed(entry) end end
+R.Share = Share
 
 function R:IsGuildMember(name)
     if self.rosterDirty then
@@ -136,6 +145,10 @@ function R:OnWhisper(text, sender, _, _, _, _, _, _, _, _, _, guid)
     end
 
     self:MaybeAutoReply(entry, text)
+    if isNew then
+        Share(entry)
+        if NS.Stats then NS.Stats.Whispered(sender) end        -- which post brought them (Core/Stats.lua)
+    end
     NS.UI:OnDataChanged()
     NS.Minimap:Update()
     -- API.lua's callbacks; free when nobody listens
@@ -174,6 +187,7 @@ function R:OnChannelMessage(text, sender, _, _, _, _, _, _, channelName)
         messages = { { text = text, at = time() } },
     }
     if NS.db.autoReply.playSound then U.PlayAlert(NS.db.autoReply.sound) end
+    Share(NS.db.responders[sender])
     NS.Say(sender .. " wants a guild", "gold")
     NS.UI:OnDataChanged()
     NS.Minimap:Update()
@@ -231,7 +245,7 @@ function R:MaybeAutoReply(entry, text)
         NS.Say(entry.name .. " auto-replied", "good")
         entry.lastReply = time()
         entry.autoReplied = true
-        if entry.status == "new" then entry.status = "contacted" end
+        if entry.status == "new" then entry.status = "contacted" Share(entry) end
         table.insert(self.replyLog, time())
     end
 end
@@ -269,6 +283,7 @@ function R:LookupPlayer(name)
     elseif SetWhoToUI then SetWhoToUI(1) end
 
     C_FriendList.SendWho('n-"' .. name .. '"')
+    if NS.Cards then NS.Cards.Working("who", "LOOKING UP " .. name:upper(), "asking the game who they are", 6) end
 
     C_Timer.After(6, function()
         if self.whoBusy and self.whoPending == name then
@@ -286,6 +301,7 @@ function R:FinishLookup()
     if C_FriendList and C_FriendList.SetWhoToUI then C_FriendList.SetWhoToUI(false)
     elseif SetWhoToUI then SetWhoToUI(0) end
     self.whoBusy, self.whoPending = false, nil
+    if NS.Cards then NS.Cards.Done("who") end
     NS.UI:OnDataChanged()
     NS.Minimap:Update()
 end
@@ -387,6 +403,7 @@ function R:SetStatus(name, status)
     local entry = NS.db.responders[name]
     if entry then
         entry.status = status
+        Share(entry)
         NS.UI:OnDataChanged()
         NS.Minimap:Update()
     end
@@ -506,7 +523,7 @@ function R:SendQuickReply(name, index)
         entry.lastReply = time()
         entry.sentReplies = entry.sentReplies or {}
         entry.sentReplies[index] = true
-        if entry.status == "new" then entry.status = "contacted" end
+        if entry.status == "new" then entry.status = "contacted" Share(entry) end
     end
     NS.UI:OnDataChanged()
     NS.Minimap:Update()
@@ -522,7 +539,7 @@ function R:SendDiscord(name)
     local entry = NS.db.responders[name]
     if entry then
         entry.lastReply = time()
-        if entry.status == "new" then entry.status = "contacted" end
+        if entry.status == "new" then entry.status = "contacted" Share(entry) end
     end
     NS.UI:OnDataChanged()
 end

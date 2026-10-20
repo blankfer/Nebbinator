@@ -1407,4 +1407,263 @@ end
     NS.db.previewMode = wasPreview
 end)()
 
+--------------------------------------------------------------------
+-- 21 Oct 2026: the guild's desk, the party scout, the cards, what works
+--------------------------------------------------------------------
+
+;(function()
+    local T, R, Sc, C, St, M = NS.Team, NS.Responders, NS.Scout, NS.Cards, NS.Stats, NS.Message
+    local now = os.time()
+    local wasPreview = NS.db.previewMode
+    NS.db.previewMode = false
+    local function onWire(cmd)
+        -- on the wire, or in the shared outbox (one message a second for every BiS addon: it waits its turn)
+        local all = {}
+        for _, w in ipairs(H.wire) do all[#all + 1] = w end
+        for _, w in ipairs(_G.LibBiSComm.outbox or {}) do all[#all + 1] = w end
+        for i = #all, 1, -1 do
+            if all[i].msg:find("NEB", 1, true) and all[i].msg:find(cmd, 1, true) and all[i].chan ~= "RAID" then return all[i].msg end
+        end
+        return nil
+    end
+    local function asRank(rank)
+        H.guild = { { name = "Kumlust-Dreamscythe", rank = rank }, { name = "Officerton-Dreamscythe", rank = 1 },
+                    { name = "Grunt-Dreamscythe", rank = 4 } }
+        R.rosterDirty = true
+    end
+
+    H.section("the guild's desk: who is an officer")
+    asRank(4)
+    H.eq(T.Rank("Officerton"), 1, "a rank read off the roster (the realm dropped)")
+    H.ok(not T.IsOfficer(), "rank 4 is not an officer")
+    H.ok(T.IsOfficer("Officerton"), "rank 1 is (BiS Guild's rule: 0..officerRank)")
+    H.ok(not T.IsOfficer("Stranger"), "nobody outside the roster is")
+
+    H.section("the guild's desk: a member keeps only who is a prospect")
+    NS.db.team = {}
+    H.wire = {}
+    T.Changed({ name = "Lfgplz", status = "contacted", class = "PRIEST", level = 60, note = "wants raids", timestamp = now })
+    local row = T.List().Lfgplz
+    H.ok(row and row.status == "contacted" and row.by == "Kumlust", "the row is mine at once: who and how far")
+    H.ok(row and row.note == nil and row.class == nil, "a member keeps no note and no class (Arn: summary for officers)")
+    H.ok(onWire("REC"), "and the guild hears it (NEB REC on the wire)")
+    local ok, by, status = T.Prospect("Lfgplz-Dreamscythe")
+    H.ok(ok == true and by == "Kumlust" and status == "contacted", "Prospect answers yes, who, how far", tostring(by))
+
+    H.section("the guild's desk: an officer keeps the summary")
+    asRank(1)
+    T.Took("Grunt", "Healzor", "trial", "PRIEST", "60", "Grunt", tostring(now), "good logs")
+    row = T.List().Healzor
+    H.ok(row and row.class == "PRIEST" and row.level == 60 and row.note == "good logs" and row.by == "Grunt",
+         "class, level and the note, and who sent it")
+    T.Took("Grunt", "Healzor", "new", "", "", "Grunt", tostring(now - 100), "")
+    H.eq(T.List().Healzor.status, "trial", "an older word about them changes nothing")
+    T.Took("Grunt", "Healzor", "accepted", "PRIEST", "60", "Grunt", tostring(now + 1), "")
+    H.eq((T.Prospect("Healzor")), false, "joined is not a prospect any more")
+    T.List().Stale = { name = "Stale", status = "contacted", by = "Grunt", at = now - 31 * 86400 }
+    H.eq((T.Prospect("Stale")), false, "a month untouched is not one either")
+    H.eq(T.Tidy(now), 1, "and the tidy takes it off the list")
+
+    H.section("the guild's desk: officers set what the guild needs")
+    H.eq(T.Pack(T.Unpack("shaman.resto=2,druid.feral=1")), "druid.feral=1,shaman.resto=2", "the needs line goes there and back, in class order")
+    local up = T.Unpack("shaman.resto=40,nope.nope=3,warrior.bogus=1")
+    H.ok(up.shaman.resto == 9 and up.nope == nil and up.warrior.bogus == nil, "capped at 9; unknown classes and specs dropped")
+    asRank(4)
+    local got, why = T.SetNeeds()
+    H.ok(got == nil and why == "officers only", "a member cannot set them", why)
+    asRank(1)
+    local keep = NS.db.needs
+    H.wire = {}
+    NS.db.needsAt = nil
+    H.ok(T.SetNeeds(nil, true), "an officer can")
+    H.ok(NS.db.needsAt ~= nil and NS.db.needsBy == "Kumlust", "stamped, and by whom")
+    H.ok(onWire("NEEDS"), "and the guild hears them (NEB NEEDS)")
+    local stamp = NS.db.needsAt
+    H.ok(not T.Adopt("Grunt", stamp + 10, "warrior.prot=3"), "needs from a member are ignored")
+    H.ok(not T.Adopt("Officerton", stamp - 10, "warrior.prot=3"), "older needs from an officer too")
+    H.ok(T.Adopt("Officerton", stamp + 10, "warrior.prot=3") and NS.db.needs.warrior.prot == 3 and NS.db.needs.shaman.resto == 0,
+         "newer needs from an officer replace ours whole")
+    H.eq(NS.db.needsBy, "Officerton", "and say who set them")
+    NS.db.needs, NS.db.needsAt, NS.db.needsBy = keep, nil, nil
+    asRank(4)
+
+    H.section("the party scout: who gets a card")
+    for _, c in ipairs(NS.CLASSES) do for _, s in ipairs(c.specs) do NS.db.needs[c.key][s.key] = 0 end end
+    NS.db.needs.shaman.resto = 2
+    NS.db.scoutSeen, NS.db.team = {}, {}
+    H.inParty = true
+    H.raid = { { name = "Kumlust", class = "MAGE", guild = "The Heathens" },
+               { name = "Shammy", class = "SHAMAN" },
+               { name = "Guildy", class = "SHAMAN", guild = "Other Guild" },
+               { name = "Ourguy", class = "SHAMAN", guild = "The Heathens", ours = true },
+               { name = "Stabby", class = "ROGUE" } }
+    local look = Sc.Look("party1")
+    H.ok(look and look.name == "Shammy" and look.guild == nil and look.want == "2 Resto Shaman",
+         "a needed class without a guild: we need 2 Resto Shaman", look and look.want)
+    look = Sc.Look("party2")
+    H.ok(look and look.guild == "Other Guild", "one with a guild: named")
+    local nobody, because = Sc.Look("party3")
+    H.ok(nobody == nil and because == "ours already", "a guildmate: no card", because)
+    nobody, because = Sc.Look("party4")
+    H.ok(nobody == nil and because == "a class we do not need", "a class we do not need: none", because)
+    nobody, because = Sc.Look("party5")
+    H.ok(nobody == nil and because == "nobody", "the client has no party5", because)
+    H.raid[2].role = "DAMAGER"
+    nobody, because = Sc.Look("party1")
+    H.ok(nobody == nil, "the group finder made them dps, and we need a resto: no card", because)
+    H.raid[2].role = "HEALER"
+    H.ok(Sc.Look("party1"), "made them a healer: the card")
+    H.raid[2].role = nil
+
+    H.section("the party scout: big without a guild, small with one")
+    while #C.up > 0 do C.Hide(C.up[1]) end
+    local sounds = #H.sounds
+    H.eq(Sc.Check(), 2, "two cards: the guildless shaman and the guilded one")
+    H.ok(#C.up == 2 and C.up[1].size == C.BIG and C.up[2].size == C.SMALL, "the guildless one big, the guilded one small")
+    H.ok(C.up[1].title._text:find("SHAMMY - A SHAMAN WITHOUT A GUILD", 1, true), "the big card names them and why", C.up[1].title._text)
+    H.eq(#H.sounds, sounds + 1, "and only the big one makes a sound")
+    H.ok(H.realWidth(C.up[1].title) <= C.BIG.w - 30, "its title fits the card", H.realWidth(C.up[1].title))
+    H.ok(C.up[2].title._text:find("<Other Guild>", 1, true), "the small one says whose they are", C.up[2].title._text)
+    H.eq(Sc.Check(), 0, "the same group again: no cards (once a week each)")
+    NS.db.scoutSeen.Shammy = now - 8 * 86400
+    H.eq(Sc.Check(), 1, "a week on, Shammy's card comes back")
+    NS.db.scout = false
+    NS.db.scoutSeen = {}
+    H.eq(Sc.Check(), 0, "/bisn scout off: none")
+    NS.db.scout = true
+
+    H.section("the party scout: somebody the guild is already talking to")
+    while #C.up > 0 do C.Hide(C.up[1]) end
+    NS.db.scoutSeen = {}
+    T.List().Shammy = { name = "Shammy", status = "contacted", by = "Officerton", at = now - 2 * 86400 }
+    Sc.Check()
+    H.ok(C.up[1].sub._text:find("Officerton talked to them 2 days ago - nudge them to join", 1, true),
+         "the card says who and when: nudge them", C.up[1].sub._text)
+
+    H.section("the party scout: the buttons")
+    local before = #H.sent
+    NS.db.responders = {}
+    C.up[1].buttons[1]:Click()
+    H.ok(#H.sent == before + 1 and H.sent[#H.sent].target == "Shammy" and H.sent[#H.sent].msg:find("want to raid with us", 1, true),
+         "Ask them whispers them", H.sent[#H.sent] and H.sent[#H.sent].msg)
+    H.ok(H.sent[#H.sent].msg:find("2 Resto Shaman", 1, true) and not H.sent[#H.sent].msg:find("{", 1, true), "with what we need, tokens filled")
+    local e = NS.db.responders.Shammy
+    H.ok(e and e.status == "contacted" and e.source == "party", "and puts them on the desk as contacted, met in a group")
+    H.ok(T.List().Shammy.by == "Kumlust", "and the guild hears I am talking to them now")
+    H.eq(#C.up, 1, "the card it was on goes")
+    C.up[1].buttons[2]:Click()
+    H.ok(NS.db.responders.Guildy and NS.db.responders.Guildy.status == "new" and NS.db.responders.Guildy.guild == "Other Guild",
+         "To desk: on the desk, nothing sent")
+
+    H.section("the party scout: a raid forming looks once, after it settles")
+    NS.db.scoutSeen = {}
+    while #C.up > 0 do C.Hide(C.up[1]) end
+    H.timers = {}
+    for _ = 1, 5 do Sc.frame:Fire("OnEvent", "GROUP_ROSTER_UPDATE") end
+    H.eq(#H.timers, 1, "five changes, one wait")
+    H.RunTimers()
+    H.ok(#C.up == 0 and #H.timers == 1, "still changing: it waits again")
+    H.clock = H.clock + Sc.SETTLE + 1
+    H.RunTimers()
+    H.eq(#C.up, 2, "settled: one look, the cards")
+    H.inParty = false
+    H.raid = { { name = "Kumlust" } }
+    H.timers = {}
+
+    H.section("the cards: a stack, a drain, a hold")
+    while #C.up > 0 do C.Hide(C.up[1]) end
+    H.eq(C.ticker:GetScript("OnUpdate"), nil, "no card: nothing ticks")
+    for i = 1, C.MAX + 2 do C.Show({ title = "card " .. i }) end
+    H.eq(#C.up, C.MAX, "never more than " .. C.MAX .. " up")
+    H.eq(C.up[1].title._text, "card 3", "the oldest went for the new ones")
+    H.ok(C.ticker:GetScript("OnUpdate") ~= nil, "cards up: it ticks")
+    C.up[1].held = true
+    C.Tick(C.SECS + 1)
+    H.ok(#C.up == 1 and C.up[1].title._text == "card 3", "a card under the mouse holds; the others drained away")
+    C.up[1].held = nil
+    C.Tick(C.SECS + 1)
+    H.eq(#C.up, 0, "let go, it drains too")
+    H.eq(C.ticker:GetScript("OnUpdate"), nil, "and the ticker stops")
+    for i = 1, C.MAX do C.Show({ title = "card " .. i, big = i == 1, buttons = { { "A", function() end } } }) end
+    local Cost = dofile("../_bisdev/dev/cost.lua")
+    local n, cby = Cost.Count(function() for _ = 1, 60 do C.Tick(0.016) end end)
+    H.eq(n, 0, "a second of three cards asks the client nothing (it only moves its own bars)", Cost.Top(cby, 4))
+    H.say(("   cost: 60 frames of %d cards = %d calls (%s)"):format(C.MAX, n, Cost.Top(cby, 4)))
+    while #C.up > 0 do C.Hide(C.up[1]) end
+
+    H.section("the cards: working bars")
+    R.whoBusy = false
+    R:LookupPlayer("Nebeon")
+    H.ok(#C.up == 1 and C.up[1].working and C.up[1].title._text == "LOOKING UP NEBEON", "a /who lookup shows its working bar")
+    C.Tick(3)
+    H.ok(C.up[1] and C.up[1].bar._w and C.up[1].bar._w > 1, "the bar fills while it looks")
+    R:FinishLookup()
+    H.eq(#C.up, 0, "done: the bar goes")
+    local wasLock = C_ChatInfo.InChatMessagingLockdown
+    C_ChatInfo.InChatMessagingLockdown = function() return true end
+    M.queue = {}
+    M:SendWhisper("Waiter", "hi")
+    M:SendWhisper("Waiter2", "hi")
+    H.ok(#C.up == 1 and C.up[1].title._text == "2 WHISPERS WAITING", "held whispers: one card that counts them", C.up[1] and C.up[1].title._text)
+    C_ChatInfo.InChatMessagingLockdown = wasLock
+    M:Flush()
+    H.eq(#C.up, 0, "sent: the card goes")
+    H.timers = {}
+
+    H.section("what works: posts, whispers, the reminder")
+    NS.db.stats = { posts = {} }
+    M.lastSend, M.lastAny = {}, nil
+    M:Send("CHANNEL", "Trade")
+    local p = NS.db.stats.posts[1]
+    H.ok(p and p.where == "Trade" and p.tpl == M:ActiveTemplate().name, "a post is kept: where and which template", p and p.where)
+    St.Whispered("Newbie", p.at + 60)
+    H.eq(p.whispers, 1, "a whisper a minute later is that post's")
+    St.Whispered("Late", p.at + St.WINDOW + 60)
+    H.eq(p.whispers, 1, "one after the window is nobody's")
+    table.insert(NS.db.stats.posts, { at = p.at - 3600, where = "General", tpl = "Short", whispers = 0 })
+    local lines = St.Lines("where")
+    H.ok(lines[1] == "Trade - 1 whisper from 1 post" and lines[2] == "General - 0 whispers from 1 post", "best channel first", lines[1])
+    NS.db.remind = 15
+    H.ok(#H.timers >= 1 and H.timers[#H.timers].delay == 15 * 60, "the reminder waits 15 min")
+    local remind = H.timers[#H.timers].fn
+    H.resting = false
+    remind()
+    H.eq(#C.up, 0, "out of town: no reminder")
+    H.resting = true
+    remind()
+    H.ok(#C.up == 1 and C.up[1].key == "remind" and C.up[1].line._text:find("Trade", 1, true), "in town: TIME TO POST AGAIN, for Trade")
+    M.lastSend, M.lastAny = {}, nil
+    before = #H.sent
+    C.up[1].buttons[1]:Click()
+    H.ok(#H.sent == before + 1 and H.sent[#H.sent].chatType == "CHANNEL" and H.sent[#H.sent].target == 2, "its Post button posts to Trade again")
+    while #C.up > 0 do C.Hide(C.up[1]) end
+    St.Remind("CHANNEL", 2)
+    local first = H.timers[#H.timers].fn
+    St.Remind("CHANNEL", 2)
+    first()
+    H.eq(#C.up, 0, "posted again since: the first reminder stays quiet (the same second too)")
+    H.timers[#H.timers].fn()
+    H.eq(#C.up, 1, "the newest one comes")
+    while #C.up > 0 do C.Hide(C.up[1]) end
+    H.timers = {}
+
+    H.section("{nextraid}: the raid pasted into BiS Guild")
+    H.eq(M:NextRaid(), "", "no BiS Guild: empty (and the ad tidies round it)")
+    local start = os.time() + 2 * 86400
+    _G.BiSGuildAPI = { RaidNight = function() return { title = "Kara", start = start, time = "20:00", date = "23-10-2026" } end }
+    H.eq(M:NextRaid(), os.date("%a", start) .. " 20:00", "two days off: the day and the time")
+    H.eq(M:Render("Next raid {nextraid}!"), "Next raid " .. os.date("%a", start) .. " 20:00!", "and the token renders it")
+    start = os.time() - 86400
+    H.eq(M:NextRaid(), "", "yesterday's raid is not an invitation")
+    _G.BiSGuildAPI = { RaidNight = function() return nil, "no raid pasted" end }
+    H.eq(M:NextRaid(), "", "nothing pasted: empty")
+    _G.BiSGuildAPI = { RaidNight = function() error("boom") end }
+    H.eq(M:NextRaid(), "", "a broken BiS Guild never breaks the ad")
+    _G.BiSGuildAPI = nil
+
+    NS.db.previewMode = wasPreview
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+    R.rosterDirty = true
+end)()
+
 H.report()

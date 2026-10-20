@@ -280,6 +280,7 @@ function NS:Initialize()
     NS.Message:Initialize()
     NS.Responders:Initialize()
     NS.Comm.Boot()
+    if NS.Team then NS.Team.Boot() end      -- the guild's desk and needs (Core/Team.lua)
     NS.UI:Initialize()
     NS.Minimap:Initialize()
 
@@ -328,6 +329,9 @@ local function HandleSlash(msg)
             NS.Util.Print("Discord link: " .. (NS.db.discord ~= "" and NS.db.discord
                 or NS.T.text("warn", "not set")))
         end
+    elseif cmd == "scout" then
+        NS.db.scout = not NS.db.scout
+        NS.Util.Print("Party scout " .. (NS.db.scout and NS.T.text("good", "ON") or NS.T.text("warn", "OFF")))
     elseif cmd == "minimap" then
         NS.ToggleMinimap()
         NS.Util.Print("Minimap button " .. (NS.db.minimap.hide and "hidden" or "shown"))
@@ -341,6 +345,7 @@ local function HandleSlash(msg)
         print("  " .. NS.T.text("accent", "/bisn config") .. " - open the options window")
         print("  " .. NS.T.text("accent", "/bisn preview") .. " - toggle preview (test) mode")
         print("  " .. NS.T.text("accent", "/bisn reply") .. " - toggle auto-reply")
+        print("  " .. NS.T.text("accent", "/bisn scout") .. " - toggle the party scout's cards")
         print("  " .. NS.T.text("accent", "/bisn discord <link>") .. " - set the Discord invite")
         print("  " .. NS.T.text("accent", "/bisn channels <a, b>") .. " - extra channels to post to")
         print("  " .. NS.T.text("accent", "/bisn minimap") .. " - show or hide the minimap button")
