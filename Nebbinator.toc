@@ -11,6 +11,7 @@
 
 Libs\BiSTheme\Console.lua
 Libs\BiSTheme\Options.lua
+Libs\BiSTheme\Minimap.lua
 Libs\LibBiSComm-1.0\LibBiSComm-1.0.lua
 
 Core\Util.lua

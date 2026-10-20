@@ -1097,6 +1097,7 @@ do
         { "Libs/LibBiSComm-1.0/LibBiSComm-1.0.lua", "../_bisdev/LibBiSComm-1.0/LibBiSComm-1.0.lua" },
         { "Libs/BiSTheme/Console.lua",              "../BiSTheme/Console.lua" },
         { "Libs/BiSTheme/Options.lua",              "../BiSTheme/Options.lua" },
+        { "Libs/BiSTheme/Minimap.lua",              "../BiSTheme/Minimap.lua" },
     }
     for _, pr in ipairs(canon) do
         local mine, ref = bytes(pr[1]), bytes(pr[2])
@@ -1772,6 +1773,32 @@ end)()
     NS.db.stats = { posts = {} }
     UI:ShowTab("Desk")
     UI:Hide()
+
+    H.section("the minimap button: the family's shared one")
+    local MB = NS.Minimap
+    local b = MB.button
+    H.ok(b and b:GetName() == "BiSMinimapNebbinator", "built on Libs/BiSTheme/Minimap.lua", b and b:GetName())
+    H.eq(b.icon._texture or b.icon._tex, MB.ICON, "wearing the star")
+    b:Click("LeftButton")
+    H.ok(UI.frame:IsShown(), "left click opens the window")
+    b:Click("LeftButton")
+    H.ok(not UI.frame:IsShown(), "and closes it")
+    b:Click("RightButton")
+    H.ok(b.menuFrame and b.menuFrame:IsShown(), "right click opens the menu")
+    b:CloseMenu()
+    local rows, scout = MB.Menu(), nil
+    for _, r in ipairs(rows) do if r.text == "party scout" then scout = r end end
+    H.ok(scout and scout.checked == true, "the menu's party scout says it is on")
+    scout.func()
+    H.eq(NS.db.scout, false, "and turns it off - the same function as /bisn scout")
+    SlashCmdList["NEBBINATOR"]("scout")
+    H.eq(NS.db.scout, true, "/bisn scout turns it back on")
+    NS.db.responders = { Waiting = { name = "Waiting", status = "new", timestamp = now, messages = {} } }
+    MB:Update()
+    H.ok(b.opts.tooltip[1]:find("1 new responder", 1, true), "the tooltip counts who waits", b.opts.tooltip[1])
+    NS.db.responders = {}
+    MB:Update()
+    H.eq(b.opts.tooltip[1], "nobody new waiting", "and says when nobody does")
 end)()
 
 H.report()

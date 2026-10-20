@@ -491,7 +491,8 @@ local ALLOWED_GLOBALS = {
     Nebbinator = true, NebbinatorDB = true,
     SLASH_NEBBINATOR1 = true, SLASH_NEBBINATOR2 = true, SLASH_NEBBINATOR3 = true,
     SLASH_NEBBINATOR4 = true,
-    NebbinatorFrame = true, NebbinatorCopyBox = true, NebbinatorMinimapButton = true,
+    NebbinatorFrame = true, NebbinatorCopyBox = true,
+    BiSMinimapNebbinator = true,     -- the shared minimap button (Libs\BiSTheme\Minimap.lua) names itself
     HARNESS = true, print = true,
     NebbinatorAPI = true,            -- API.lua: the one door other addons use (playbook 5a)
     -- shared, embedded, and global by design

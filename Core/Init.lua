@@ -232,6 +232,12 @@ function NS.SetDiscord(link)
     NS.UI:Refresh()
 end
 
+function NS.ToggleScout()
+    NS.db.scout = not NS.db.scout
+    NS.Say("party scout " .. (NS.db.scout and "on" or "off"), NS.db.scout and "good" or "warn")
+    NS.UI:Refresh()
+end
+
 function NS.ToggleMinimap()
     NS.db.minimap.hide = not NS.db.minimap.hide
     NS.Minimap:Update()
@@ -336,7 +342,7 @@ local function HandleSlash(msg)
                 or NS.T.text("warn", "not set")))
         end
     elseif cmd == "scout" then
-        NS.db.scout = not NS.db.scout
+        NS.ToggleScout()
         NS.Util.Print("Party scout " .. (NS.db.scout and NS.T.text("good", "ON") or NS.T.text("warn", "OFF")))
     elseif cmd == "minimap" then
         NS.ToggleMinimap()
