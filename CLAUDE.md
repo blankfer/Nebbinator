@@ -2,7 +2,7 @@ Read ../_bisdev/CLAUDE.md first.
 
 ## Layout (Nebbinator only)
 
-- `Nebbinator.toc`: Interface 20506. It holds the load order and is the only place the version lives (`## Version`, currently 3.3.1). `NS.VERSION` reads it through `GetAddOnMetadata`, and `dev/release.ps1` and every dev suite read the TOC too. SavedVariables are `NebbinatorDB, NubbinatorDB`. `## OptionalDeps: BiSTheme`. Load order: `Libs` → `Core\Util`, `Init`, `Message`, `Responders` → `API.lua` (`NebbinatorAPI`, read-only plus Open, for other addons; its header is the doc) → `UI\Kit`, `Window`, `SendBar`, `Desk`, `Options`, `Pages\*`, `Minimap`.
+- `Nebbinator.toc`: Interface 16001 - Forever only since 21 Oct 2026 (Arn: "no more tbc support"). It holds the load order and is the only place the version lives (`## Version`, currently 3.3.1). `NS.VERSION` reads it through `GetAddOnMetadata`, and `dev/release.ps1` and every dev suite read the TOC too. SavedVariables are `NebbinatorDB, NubbinatorDB`. `## OptionalDeps: BiSTheme`. Load order: `Libs` → `Core\Util`, `Init`, `Message`, `Responders` → `API.lua` (`NebbinatorAPI`, read-only plus Open, for other addons; its header is the doc) → `UI\Kit`, `Window`, `SendBar`, `Desk`, `Options`, `Pages\*`, `Minimap`.
 - Every file starts with `local ADDON, NS = ...`, and each module hangs off `NS` (`NS.Util`, `NS.Message`, `NS.Responders`, `NS.Kit`, `NS.UI`, `NS.Minimap`). `NS` is exposed as `_G.Nebbinator`. Files reach sibling modules through `NS.*`, never a bare local, because later files would not exist yet when an earlier one loads.
 - `Core/Init.lua` (425 lines): the namespace, the DB, slash commands and boot. Sections are split by `----` banners:
   - Defaults, plus migration from 1.x (`NS.DB_VERSION`, currently 3; the value is stored in `db.dbVersion`). `NS:LoadDB` reads `NebbinatorDB or NubbinatorDB` (1.x used the old name). v1 goes through `MigrateV1`; v2 → v3 only fills in new keys and drops `db.windows`.
@@ -30,7 +30,6 @@ Read ../_bisdev/CLAUDE.md first.
 - `dev/tests.lua` (929 lines): the main suite, `lua5.1 dev/tests.lua`. It loads files in TOC order and seeds a v1 `NubbinatorDB` so the migration runs every time. `NEB=<path>` runs it against a scratch copy, which is how you check that a stub still catches a deliberately broken copy.
 - `dev/options.lua` (199 lines): tests `Libs/BiSTheme/Options.lua` on its own, from a hand list (`OPT=` overrides the root). It expects `T.OPTIONS_MINOR` to be 2.
 - `dev/theme.lua` (30 lines): checks the palette both without and with BiSTheme. It needs the real `../BiSTheme/BiSTheme.lua` next to this checkout (`BISTHEME=` overrides).
-- `dev/suite.lua`: a stub left after a rename. It only errors and points you to `dev/tests.lua`. There are no stress, kit or load suites.
 - `dev/README.md`: how to run the suites, why the stubs are strict, and a table of past test-breaking mutations.
 - `dev/release.ps1`: zips the addon into Downloads and uploads it to CurseForge project 1683356 (unlisted).
   - Switches: `-Type alpha|beta|release` (alpha by default), `-ZipOnly`, `-Force`.

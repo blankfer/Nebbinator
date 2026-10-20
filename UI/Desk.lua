@@ -20,14 +20,14 @@ UI.CLOCK_W   = 22     -- room a send button reserves for its corner clock
 
 local FILTERS = {
     { key = "all", label = "All" }, { key = "new", label = "New" },
-    { key = "contacted", label = "Contacted" }, { key = "trial", label = "Trial" },
+    { key = "contacted", label = "Contacted" }, { key = "invited", label = "Invited" }, { key = "trial", label = "Trial" },
     { key = "accepted", label = "Accepted" }, { key = "declined", label = "Declined" },
 }
 
-local STATUS_ORDER = { "new", "contacted", "trial", "accepted", "declined" }
+local STATUS_ORDER = { "new", "contacted", "invited", "trial", "accepted", "declined" }
 
 local STATUS_TONE = {
-    new = "gold", contacted = "slate", trial = "accent",
+    new = "gold", contacted = "slate", invited = "accent", trial = "accent",
     accepted = "good", declined = "warn",
 }
 

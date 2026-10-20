@@ -7,8 +7,6 @@ local U = NS.Util
 NS.Responders = {}
 local R = NS.Responders
 
-local WHO_INTERVAL = 3.5      -- server throttles /who; stay well under it
-
 function R:Initialize()
     self.whoPending   = nil
     self.whoBusy      = false
@@ -40,6 +38,7 @@ function R:Initialize()
     end)
 
     self:InstallChatFilter()
+    self:Tidy()
 
     if IsInGuild() then
         if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster()
@@ -207,7 +206,8 @@ function R:MaybeAutoReply(entry, text)
     local settings = NS.db.autoReply
     if not settings.enabled then return end
     if settings.skipGuildies and self:IsGuildMember(entry.name) then return end
-    if not self:MatchesKeywords(text) then return end
+    -- LAUNCH-DAY MODE (21 Oct 2026): everyone gets the "we're swamped" line, keywords or not
+    if not settings.busy and not self:MatchesKeywords(text) then return end
 
     -- Don't ping-pong with another addon echoing our own link back at us.
     local discord = U.Trim(NS.db.discord)
@@ -221,8 +221,11 @@ function R:MaybeAutoReply(entry, text)
         return
     end
 
-    local body = NS.Message:Render(settings.text)
+    local body = NS.Message:Render(settings.busy and settings.busyText or settings.text)
     if body == "" then return end
+    -- CLASS-AWARE (21 Oct 2026): their class is one we need - say so, with the specs
+    local want = settings.classAware ~= false and self:NeedFor(entry, text)
+    if want then body = body .. " " .. want end
 
     if NS.Message:SendWhisper(entry.name, body) then
         NS.Say(entry.name .. " auto-replied", "good")
@@ -351,8 +354,9 @@ function R:ParseWhoLine(line)
 end
 
 function R:OnSystemMessage(text)
-    if not self.whoBusy then return end
     if self:Hid("CHAT_MSG_SYSTEM", text) then return end
+    if self:GuildNews(text) then return end
+    if not self.whoBusy then return end
     if self:ParseWhoLine(text) then
         C_Timer.After(0.1, function()
             if self.whoBusy then self:FinishLookup() end
@@ -431,12 +435,14 @@ end
 function R:LogsUrl(name)
     local url = U.Trim(NS.db.logsUrl)
     if url == "" then return "" end
-    local realm = (GetRealmName() or ""):gsub("%s+", ""):lower()
+    -- the realm as Warcraft Logs writes it ("living-flame"), the region from the client (21 Oct 2026: it
+    -- said "us" whoever you were)
+    local realm = (GetRealmName() or ""):gsub("'", ""):gsub("%s+", "-"):lower()
     return (url:gsub("{(%w+)}", function(token)
         token = token:lower()
-        if token == "name"   then return U.StripRealm(name):lower() end
+        if token == "name"   then return (U.StripRealm(name):gsub("%s+", "-"):lower()) end
         if token == "realm"  then return realm end
-        if token == "region" then return "us" end
+        if token == "region" then return R.Region() end
         return "{" .. token .. "}"
     end))
 end
@@ -475,7 +481,11 @@ function R:InviteToGuild(name)
     end
     GuildInvite(name)
     NS.Say(name .. " invited", "good")
-    self:SetStatus(name, "trial")
+    -- INVITED, not trial (21 Oct 2026): they have not said yes yet. The game's "has joined the guild"
+    -- line moves them on by itself (R:GuildNews).
+    local entry = NS.db.responders[name]
+    if entry then entry.invitedAt = time() end
+    self:SetStatus(name, "invited")
 end
 
 function R:SendQuickReply(name, index)
@@ -515,4 +525,105 @@ function R:SendDiscord(name)
         if entry.status == "new" then entry.status = "contacted" end
     end
     NS.UI:OnDataChanged()
+end
+
+--------------------------------------------------------------------
+-- 21 Oct 2026, the review
+--------------------------------------------------------------------
+
+--- The region as Warcraft Logs writes it, from the client (us when it will not say).
+local REGIONS = { [1] = "us", [2] = "kr", [3] = "eu", [4] = "tw", [5] = "cn" }
+function R.Region()
+    local fn = GetCurrentRegion
+    if not fn then return "us" end
+    local ok, n = pcall(fn)
+    return (ok and REGIONS[n]) or "us"
+end
+
+--- A client sentence ("%s has joined the guild.") as a pattern, its %s a capture.
+function R.Pattern(fmt)
+    if type(fmt) ~= "string" then return nil end
+    local body = fmt:gsub("%%%d?%$?s", "\1")
+    body = body:gsub("([%^%$%(%)%%%.%[%]%*%+%-%?])", "%%%1")
+    body = body:gsub("\1", "(.+)")
+    return "^" .. body .. "$"
+end
+
+--- JOINED, BY ITSELF (21 Oct 2026, the review: nothing noticed when somebody actually joined). The game
+--- says so in a system line; somebody on the desk who joins is Accepted, one who declines the invite is
+--- Declined. Answers true when the line was one of these.
+function R:GuildNews(text)
+    if type(text) ~= "string" then return false end
+    local lines = {
+        { _G.ERR_GUILD_JOIN_S or "%s has joined the guild.", "accepted" },
+        { _G.ERR_GUILD_DECLINE_S or "%s declines your guild invitation.", "declined" },
+    }
+    for _, l in ipairs(lines) do
+        local pat = R.Pattern(l[1])
+        local who = pat and text:match(pat)
+        if who then
+            who = U.StripRealm(who)
+            local entry = NS.db.responders[who]
+            if entry then
+                entry.status = l[2]
+                if l[2] == "accepted" then
+                    entry.joinedAt = time()
+                    NS.Say(who .. " joined the guild", "good")
+                    if NS.Cards and NS.Cards.Show then
+                        NS.Cards.Show(who:upper() .. " JOINED THE GUILD", "On the desk since " .. U.TimeAgo(entry.firstAt or entry.timestamp) .. " - welcome them in!")
+                    end
+                    if NS.APIFire then NS.APIFire("Nebbinator_Joined", who) end
+                end
+                if NS.Team and NS.Team.Changed then NS.Team.Changed(entry) end
+                NS.UI:OnDataChanged()
+                NS.Minimap:Update()
+            end
+            return true
+        end
+    end
+    return false
+end
+
+--- A DESK THAT FORGETS (21 Oct 2026, the review: it never did, and a month of recruiting is hundreds of
+--- rows). Somebody who never got further than a word is gone after R.KEEP_DAYS; anybody else after
+--- R.KEEP_LONG; and never more than R.KEEP_MAX, the oldest going first. Answers how many went.
+R.KEEP_DAYS, R.KEEP_LONG, R.KEEP_MAX = 30, 90, 300
+local SHORT = { new = true, contacted = true, declined = true, invited = true }
+function R:Tidy(now)
+    now = now or time()
+    local gone, list = 0, {}
+    for name, e in pairs(NS.db.responders) do
+        local age = (now - (tonumber(e.timestamp) or now)) / 86400
+        if age > (SHORT[e.status] and self.KEEP_DAYS or self.KEEP_LONG) then
+            NS.db.responders[name] = nil
+            gone = gone + 1
+        else
+            list[#list + 1] = e
+        end
+    end
+    if #list > self.KEEP_MAX then
+        table.sort(list, function(a, b) return (a.timestamp or 0) > (b.timestamp or 0) end)
+        for i = self.KEEP_MAX + 1, #list do
+            NS.db.responders[list[i].name] = nil
+            gone = gone + 1
+        end
+    end
+    return gone
+end
+
+--- CLASS-AWARE (21 Oct 2026): what we need of their class - "We need 2 Resto Shaman right now." - when
+--- their class (from their whisper's GUID, or named in what they wrote) is on the needs list. Else nil.
+function R:NeedFor(entry, text)
+    local lower = (text or ""):lower()
+    for _, class in ipairs(NS.CLASSES) do
+        local theirs = entry and entry.class == class.file
+        local loc = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[class.file]
+        local named = lower:find(class.name:lower(), 1, true)
+            or (type(loc) == "string" and lower:find(loc:lower(), 1, true))
+        if theirs or named then
+            local want = NS.Message:NeedsOf(class)
+            if want then return "We need " .. want .. " right now." end
+        end
+    end
+    return nil
 end

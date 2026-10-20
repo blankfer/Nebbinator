@@ -434,7 +434,7 @@ _G.GetAddOnMetadata = function(_, key) return key == "Version" and "test" or nil
 --------------------------------------------------------------------
 
 local ALLOWED_GLOBALS = {
-    Nebbinator = true, NebbinatorDB = true, NubbinatorDB = true,
+    Nebbinator = true, NebbinatorDB = true,
     SLASH_NEBBINATOR1 = true, SLASH_NEBBINATOR2 = true, SLASH_NEBBINATOR3 = true,
     SLASH_NEBBINATOR4 = true,
     NebbinatorFrame = true, NebbinatorCopyBox = true, NebbinatorMinimapButton = true,

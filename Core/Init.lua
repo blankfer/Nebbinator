@@ -10,7 +10,7 @@ NS.ADDON_NAME    = ADDON
 -- spent v3 announcing itself as 2.0.1.
 NS.VERSION       = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version"))
                    or (GetAddOnMetadata and GetAddOnMetadata(ADDON, "Version")) or "dev"
-NS.DB_VERSION    = 3
+NS.DB_VERSION    = 4
 NS.CHAT_LIMIT    = 255
 
 --------------------------------------------------------------------
@@ -83,6 +83,10 @@ local function Defaults()
             playSound   = true,
             sound       = "bell",       -- deliberately not the ready-check sound
             soundOnlyNew = false,       -- false = ding on every message, not just first contact
+            -- 21 Oct 2026, the review:
+            classAware  = true,         -- "We need 2 Resto Shaman right now." when theirs is a class we need
+            busy        = false,        -- launch-day mode: everyone gets busyText, keywords or not
+            busyText    = "We're swamped with whispers right now! Everything is in our Discord: {discord} - an officer will whisper you back.",
         },
 
         -- Four canned whispers, one button each on every responder row.
@@ -94,7 +98,9 @@ local function Defaults()
         },
 
         -- {name} is the responder; {realm} and {region} fill themselves in.
-        logsUrl = "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}",
+        -- {name} is the responder; {realm} and {region} come from the client (21 Oct 2026: it said us and
+        -- dreamscythe for everybody). Warcraft Logs' Forever address is UNVERIFIED - it is a setting.
+        logsUrl = "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}",
 
         leadFinder = false,        -- watch channels for "LF guild" posts
         responders = {},
@@ -104,68 +110,13 @@ local function Defaults()
         bookOpen   = false,        -- the tab rail is rolled up until asked for
         filter     = "all",
         hiddenChannels = {},       -- send buttons right-clicked off the desk
+        -- 21 Oct 2026, the review:
+        scout      = true,         -- the party scout's cards (Core/Scout.lua)
+        scoutSeen  = {},           -- name -> when a card last asked about them
+        remind     = 15,           -- minutes after a post to remind you, in a city (0 = never)
+        stats      = { posts = {}, whispers = {} },   -- what works (Core/Stats.lua)
+        officerRank = 1,           -- guild ranks 0..this are officers (BiS Guild's rule, the same number)
     }
-end
-
---------------------------------------------------------------------
--- Migration from the 1.x saved variables
---------------------------------------------------------------------
-
-local V1_SPEC_MAP = {
-    warrior = { prot = "prot",  dps = "fury"  },
-    paladin = { prot = "prot",  holy = "holy", ret = "ret" },
-    priest  = { holy = "holy",  shadow = "shadow" },
-    shaman  = { ele = "ele",    resto = "resto", enh = "enh" },
-    druid   = { resto = "resto", boomie = "balance", tank = "feral", feral = "cat" },
-    mage    = { dps = "dps" },
-    warlock = { dps = "dps" },
-    hunter  = { dps = "dps" },
-    rogue   = { dps = "dps" },
-}
-
-local function MigrateV1(old)
-    local new = Defaults()
-    if type(old) ~= "table" then return new end
-
-    if type(old.needs) == "table" then
-        for classKey, specs in pairs(old.needs) do
-            local map = V1_SPEC_MAP[classKey]
-            if map and type(specs) == "table" then
-                for oldSpec, count in pairs(specs) do
-                    local newSpec = map[oldSpec]
-                    if newSpec and new.needs[classKey] and type(count) == "number" then
-                        new.needs[classKey][newSpec] = count
-                    end
-                end
-            end
-        end
-    end
-
-    if type(old.raidTimes) == "table" then
-        for dayKey, value in pairs(old.raidTimes) do
-            if new.raidTimes[dayKey] ~= nil and type(value) == "string" then
-                new.raidTimes[dayKey] = value
-            end
-        end
-    end
-
-    new.preText     = type(old.preText) == "string" and old.preText or ""
-    new.postText    = type(old.postText) == "string" and old.postText or ""
-    new.previewMode = old.previewMode and true or false
-    new.responders  = type(old.responders) == "table" and old.responders or {}
-
-    -- Rebuild the 1.x message shape as a template so nothing is lost.
-    if new.preText ~= "" or new.postText ~= "" then
-        local parts = {}
-        if new.preText ~= ""  then table.insert(parts, "{pre}")  end
-        table.insert(parts, "{needs}")
-        table.insert(parts, "Raid Times: {times}")
-        if new.postText ~= "" then table.insert(parts, "{post}") end
-        table.insert(new.templates, 1, { name = "Migrated (v1)", text = table.concat(parts, " - ") })
-        new.activeTemplate = 1
-    end
-
-    return new
 end
 
 --------------------------------------------------------------------
@@ -173,20 +124,19 @@ end
 --------------------------------------------------------------------
 
 function NS:LoadDB()
-    -- 1.x shipped as NubbinatorDB; keep reading it so upgrades are seamless.
-    local saved = _G.NebbinatorDB or _G.NubbinatorDB
-
+    -- FOREVER ONLY (Arn, 21 Oct 2026: "this is a forever addon no more tbc support"). Forever keeps its
+    -- own WTF folder, so nothing from the TBC 1.x/2.x days (NubbinatorDB) can be on this client: the old
+    -- migration went. A beta save from 3.x fills in whatever is new.
+    local saved = _G.NebbinatorDB
     if type(saved) ~= "table" or next(saved) == nil then
         saved = Defaults()
-    elseif (saved.dbVersion or 1) < 2 then
-        saved = MigrateV1(saved)
-        NS.migratedThisSession = true
-    elseif (saved.dbVersion or 1) < NS.DB_VERSION then
-        -- v2 -> v3 only added keys; ApplyDefaults fills them in
-        saved = NS.Util.ApplyDefaults(saved, Defaults())
-        saved.windows = nil
     else
         saved = NS.Util.ApplyDefaults(saved, Defaults())
+        saved.windows = nil
+        -- the old fixed logs address becomes the one that reads your realm and region
+        if saved.logsUrl == "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}" then
+            saved.logsUrl = Defaults().logsUrl
+        end
     end
 
     saved.dbVersion = NS.DB_VERSION
@@ -333,11 +283,6 @@ function NS:Initialize()
     NS.UI:Initialize()
     NS.Minimap:Initialize()
 
-    -- the window says hello in its own prompt; chat only speaks when the
-    -- upgrade actually moved somebody's settings
-    if NS.migratedThisSession then
-        NS.Util.Print("upgraded your old settings - needs, raid times and responders were kept.")
-    end
     NS.Say("ready", "good")
 end
 

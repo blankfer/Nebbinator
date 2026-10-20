@@ -3,44 +3,6 @@
 
 local ADDON, NS = ...
 
--- BiS Theme: use the shared palette when it's loaded, otherwise the same values inline.
-local T = BiSTheme
-if not T then
-  local hex = { bg="121020", surface="1a1730", sunken="221d3c", line="2a2446", line2="3a3260",
-    ink="ece8f6", ink2="c6bedd", muted="968ead", accent="b980ff", accentSoft="2c2148",
-    good="4fd0cf", warn="f08cb0", gold="e5c04a", slate="8fb4d6", dim="8e86a6",
-    epic="c08cff", rare="5fa8f0", uncommon="5fd06f", common="ece8f6", poor="8e86a6" }
-  local cache = {}
-  local function rgb(name)
-    local h = hex[name] or hex.ink
-    local c = cache[h]
-    if not c then
-      c = { tonumber(h:sub(1,2),16)/255, tonumber(h:sub(3,4),16)/255, tonumber(h:sub(5,6),16)/255 }
-      cache[h] = c
-    end
-    return c[1], c[2], c[3]
-  end
-  T = {
-    hex = hex, rgb = rgb,
-    rgba = function(n, a) local r, g, b = rgb(n); return r, g, b, (a or 1) end,
-    text = function(n, s) return "|cff" .. (hex[n] or hex.ink) .. tostring(s) .. "|r" end,
-    classRGB = function(tok)
-      local c = RAID_CLASS_COLORS and RAID_CLASS_COLORS[tok]
-      if c then return c.r, c.g, c.b end
-      return rgb("ink")
-    end,
-    pctColor = function(p)
-      if p == nil then return "muted" elseif p >= 80 then return "good" elseif p < 40 then return "warn" end
-      return "ink2"
-    end,
-    skin = function(f, border)
-      if not f.SetBackdrop then return end
-      f:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8x8", edgeFile = "Interface\\Buttons\\WHITE8x8", edgeSize = 1 })
-      f:SetBackdropColor(rgb("surface")); f:SetBackdropBorderColor(rgb(border or "line2"))
-    end,
-  }
-end
-NS.T = T
 
 NS.Util = {}
 local U = NS.Util
@@ -95,6 +57,10 @@ function NS.T.text(name, str)
     end
     return "|cff" .. (HEX[name] or "ffffff") .. tostring(str or "") .. "|r"
 end
+
+-- (one palette: the block that used to sit above this file's helpers built a second one from BiSTheme
+-- at load and was thrown away here - 21 Oct 2026, the review)
+local T = NS.T
 
 --------------------------------------------------------------------
 -- Class / spec data (TBC). Order here is the order used everywhere:
@@ -157,6 +123,7 @@ NS.DAYS = {
 NS.STATUSES = {
     { key = "new",       name = "New",       color = { T.rgb("ink") } },
     { key = "contacted", name = "Contacted", color = { T.rgb("slate") } },
+    { key = "invited",   name = "Invited",   color = { T.rgb("accent") } },
     { key = "trial",     name = "Trial",     color = { T.rgb("gold") } },
     { key = "accepted",  name = "Accepted",  color = { T.rgb("good") } },
     { key = "declined",  name = "Declined",  color = { T.rgb("warn") } },
@@ -213,22 +180,25 @@ end
 -- Strings
 --------------------------------------------------------------------
 
--- Alert sounds. Each entry tries its file first, then the named sound kit,
--- so it still works if one of the two is missing on this client.
+-- Alert sounds, BY SOUND KIT ID ONLY (21 Oct 2026, the review). This used to try a game FILE first, and
+-- on Forever's engine PlaySoundFile with a game path plays nothing AND reports success - BiS Gamba lost an
+-- evening to it on 17 Sep - so every alert, the default bell included (a file only), was silent and the
+-- kit behind it was never tried. Kit ids from Wowhead's Classic sound data; UNVERIFIED in game until heard
+-- (the options stepper plays each one as you pick it).
 -- `short` is what the options stepper shows between its < and >: 48 px at 8 pt
 -- is about nine characters, and a name trimmed to "Raid wa..." tells you
 -- nothing. `name` is still the full one for tooltips and chat.
 NS.SOUNDS = {
     { key = "none",     name = "No sound",          short = "none" },
-    { key = "bell",     name = "Bell toll",         short = "bell",     file = "Sound\\Doodad\\BellTollAlliance.ogg" },
-    { key = "bell2",    name = "Bell, deeper",      short = "bell 2",   file = "Sound\\Doodad\\BellTollNightElf.ogg" },
-    { key = "auction",  name = "Auction house",     short = "auction",  kit = "AUCTION_WINDOW_OPEN", file = "Sound\\Interface\\AuctionWindowOpen.ogg" },
-    { key = "ping",     name = "Map ping",          short = "ping",     kit = "MAP_PING",            file = "Sound\\Interface\\MapPing.ogg" },
-    { key = "queue",    name = "Queue pop",         short = "queue",    kit = "PVP_THROUGH_QUEUE",   file = "Sound\\Interface\\PVPThroughQueue.ogg" },
-    { key = "levelup",  name = "Level up",          short = "level up", kit = "LEVELUP", file = "Sound\\Interface\\LevelUp.ogg" },
-    { key = "murloc",   name = "Murloc",            short = "murloc",   kit = "MURLOC_AGGRO" },
-    { key = "raidhorn", name = "Raid warning horn", short = "horn",     kit = "RAID_WARNING",        file = "Sound\\Interface\\RaidWarning.ogg" },
-    { key = "whisper",  name = "Whisper ding",      short = "whisper",  kit = "TELL_MESSAGE",        file = "Sound\\Interface\\iTellMessage.ogg" },
+    { key = "bell",     name = "Bell toll",         short = "bell",     kit = 6594 },   -- BellTollAlliance
+    { key = "bell2",    name = "Bell, deeper",      short = "bell 2",   kit = 6595 },   -- BellTollHorde
+    { key = "auction",  name = "Auction house",     short = "auction",  kit = 5274 },
+    { key = "ping",     name = "Map ping",          short = "ping",     kit = 3175 },
+    { key = "queue",    name = "Queue pop",         short = "queue",    kit = 8458 },
+    { key = "levelup",  name = "Level up",          short = "level up", kit = 888 },
+    { key = "murloc",   name = "Murloc",            short = "murloc",   kit = 416 },
+    { key = "raidhorn", name = "Raid warning horn", short = "horn",     kit = 8959 },
+    { key = "whisper",  name = "Whisper ding",      short = "whisper",  kit = 3081 },
 }
 
 --- The 1-based position of a sound key in the list, for the options stepper.
@@ -250,13 +220,11 @@ function U.PlayAlert(key)
     local sound = U.SoundByKey(key)
     if not sound or sound.key == "none" then return end
 
-    -- "Master" so it is heard even with sound effects turned down.
-    if sound.file and PlaySoundFile and PlaySoundFile(sound.file, "Master") then return end
-    local kit = sound.kit and SOUNDKIT and SOUNDKIT[sound.kit]
-    if kit then
-        if PlaySound(kit, "Master") then return end
-        PlaySound(kit)
-    end
+    -- "Master" so it is heard even with sound effects turned down
+    if not (sound.kit and PlaySound) then return end
+    local ok, willPlay = pcall(PlaySound, sound.kit, "Master")
+    if ok and willPlay ~= false then return true end
+    pcall(PlaySound, sound.kit)
 end
 
 function U.Trim(s)
@@ -349,10 +317,16 @@ function U.TimeAgo(ts)
 end
 
 -- Recursive defaults fill: adds missing keys, never clobbers user values.
+-- A LIST IS THE PLAYER'S (21 Oct 2026, the review): the templates and the quick replies are numbered
+-- lists, and filling a deleted number back in from the defaults brought a template the player had removed
+-- back at every login. A default that is a list only fills in when the player has no list at all.
+local function isList(t) return type(t) == "table" and t[1] ~= nil end
 function U.ApplyDefaults(target, source)
     if type(target) ~= "table" then target = {} end
     for k, v in pairs(source) do
-        if type(v) == "table" then
+        if isList(v) and type(target[k]) == "table" then
+            -- the player's own list, as they left it
+        elseif type(v) == "table" then
             target[k] = U.ApplyDefaults(target[k], v)
         elseif target[k] == nil then
             target[k] = v

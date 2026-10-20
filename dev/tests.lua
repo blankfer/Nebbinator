@@ -10,13 +10,21 @@ local ROOT = os.getenv("NEB") or (HERE .. "/..")
 -- loads. BiSTools has read its TOC since day one; this now does too.
 local FILES = H.TOC(ROOT, "Nebbinator.toc")
 
--- an existing v1 profile, so the upgrade path is exercised on every run
-_G.NubbinatorDB = {
+-- A 3.x BETA SAVE (Forever only since 21 Oct 2026: the TBC 1.x migration is gone - Forever keeps its own
+-- WTF folder, so no TBC save can be on its client). The upgrade fills in what is new and keeps the rest -
+-- including a template list the player cut down to two, which used to grow back to three.
+_G.NebbinatorDB = {
+    dbVersion = 3,
     needs = { shaman = { resto = 2, ele = 0, enh = 0 },
-              druid = { boomie = 1, tank = 1, resto = 0, feral = 0 },
-              warrior = { prot = 1, dps = 0 } },
+              druid = { balance = 1, feral = 1, resto = 0, cat = 0 },
+              warrior = { prot = 1, arms = 0, fury = 0 } },
     raidTimes = { tuesday = "5pm", sunday = "5pm server time" },
     preText = "lf raiders", postText = "SSC/TK",
+    templates = {
+        { name = "Mine", text = "<{guild}> needs {needs}. {times}. {discord}" },
+        { name = "Short", text = "<{guild}> recruiting: {needs}. {times}. Whisper for info!" },
+    },
+    logsUrl = "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}",
     responders = { Dps4 = { name = "Dps4", message = "are you recruiting?", timestamp = os.time() } },
 }
 
@@ -40,12 +48,17 @@ end
 
 NS:Initialize()
 H.ok(NS.db ~= nil, "db exists")
-H.eq(NS.db.dbVersion, 3, "db upgraded to v3")
-H.eq(NS.db.needs.shaman.resto, 2, "v1 needs carried over")
-H.eq(NS.db.needs.druid.balance, 1, "v1 boomie -> balance")
-H.eq(NS.db.needs.druid.feral, 1, "v1 tank -> feral")
-H.eq(NS.db.raidTimes.tuesday, "5pm", "v1 raid times carried over")
-H.ok(NS.db.responders.Dps4 ~= nil, "v1 responders carried over")
+H.eq(NS.db.dbVersion, 4, "a 3.x save upgraded to v4")
+H.eq(NS.db.needs.shaman.resto, 2, "its needs kept")
+H.eq(NS.db.needs.druid.balance, 1, "every spec of them")
+H.eq(NS.db.raidTimes.tuesday, "5pm", "its raid times kept")
+H.ok(NS.db.responders.Dps4 ~= nil, "its desk kept")
+H.eq(#NS.db.templates, 2, "a template list the player cut to two stays two (it grew back to three)")
+H.eq(NS.db.templates[1].name, "Mine", "and in the player's order")
+H.eq(NS.db.logsUrl, "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}",
+     "the old fixed logs address becomes the one that reads your realm and region")
+H.ok(NS.db.autoReply.busyText ~= nil and NS.db.autoReply.classAware == true and NS.db.scout == true,
+     "and what is new is filled in")
 H.eq(NS.db.windows, nil, "old two-window positions dropped")
 H.eq(#NS.db.quickReplies, 4, "four quick replies")
 
@@ -764,7 +777,7 @@ H.eq(UI.frame:GetTop(), topBefore, "and neither does dealing with them")
 H.section("the filter buttons are on the desk, not in a phantom frame")
 -- The old container had one anchor and no width, so it measured 0 wide and its
 -- children never drew: the desk reserved 22 px and showed a blank band.
-H.eq(#UI.filterButtons, 6, "six filters")
+H.eq(#UI.filterButtons, 7, "seven filters (invited, since 21 Oct 2026)")
 for _, entry in ipairs(UI.filterButtons) do
     H.eq(entry.button:GetParent(), UI.desk, "the " .. entry.key .. " button hangs off the desk")
     local x, y = entry.button:OffsetFor("TOPLEFT")
@@ -1274,5 +1287,124 @@ do
     R:ClearWithStatus(nil)
     NS.db.autoReply.enabled = wasAuto
 end
+
+-- ===================================================================== 21 Oct 2026: the review
+-- Arn: "this is a forever addon no more tbc support" - the Forever fixes. A function: the main chunk is
+-- near Lua's 200 locals.
+;(function()
+    local R, M, U = NS.Responders, NS.Message, NS.Util
+    local wasPreview = NS.db.previewMode
+    NS.db.previewMode = false
+
+    H.section("review: sounds by kit id only (a game file is silent on Forever)")
+    local played, files = {}, 0
+    local realPS, realPSF = _G.PlaySound, _G.PlaySoundFile
+    _G.PlaySound = function(id) played[#played + 1] = id return true end
+    _G.PlaySoundFile = function() files = files + 1 return true end
+    for _, snd in ipairs(NS.SOUNDS) do
+        H.ok(snd.key == "none" or (type(snd.kit) == "number" and snd.file == nil), "a kit id, no file: " .. snd.key)
+    end
+    U.PlayAlert("bell")
+    H.ok(played[1] == 6594 and files == 0, "the default bell plays its kit, and no file is ever tried", tostring(played[1]))
+    _G.PlaySound, _G.PlaySoundFile = realPS, realPSF
+
+    H.section("review: a long ad, a click per part")
+    local realBuild = M.Build
+    local long = string.rep("word ", 70)                        -- 350 characters: two parts
+    M.Build = function() return U.Trim(long), {} end
+    M.lastSend = {}
+    local before = #H.sent
+    M:Send("CHANNEL", "Trade")
+    H.eq(#H.sent, before + 1, "the click sends part one, and only part one")
+    H.RunTimers()
+    H.eq(#H.sent, before + 1, "nothing follows on a timer - the game refuses a public post without a click")
+    H.eq(M:PendingFor("CHANNEL", "Trade"), "2/2", "the button says part 2 of 2 is waiting")
+    M:Send("CHANNEL", "Trade")
+    H.ok(#H.sent == before + 2 and H.sent[#H.sent].chatType == "CHANNEL", "the next click sends part two")
+    H.eq(M:PendingFor("CHANNEL", "Trade"), nil, "and the button is a send button again")
+    M.lastSend = {}
+    before = #H.sent
+    M:Send("GUILD")
+    H.RunTimers()
+    H.eq(#H.sent, before + 2, "guild chat is no public channel: both parts, the second on a timer")
+    M.Build = realBuild
+
+    H.section("review: when the game holds chat back")
+    local locked = true
+    _G.C_ChatInfo.InChatMessagingLockdown = function() return locked end
+    M.lastSend = {}
+    before = #H.sent
+    M:Send("CHANNEL", "Trade")
+    H.eq(#H.sent, before, "no post while the game holds chat back")
+    M:SendWhisper("Kumlance", "hello there")
+    H.eq(#H.sent, before, "a whisper waits")
+    H.eq(#M.queue, 1, "held, not lost")
+    locked = false
+    H.RunTimers()
+    H.ok(#H.sent == before + 1 and H.sent[#H.sent].target == "Kumlance" and #M.queue == 0, "and goes the moment it is allowed")
+    _G.C_ChatInfo.InChatMessagingLockdown = nil
+
+    H.section("review: the logs address reads your realm and region")
+    local realRealm, realRegion = _G.GetRealmName, _G.GetCurrentRegion
+    _G.GetRealmName = function() return "Living Flame" end
+    _G.GetCurrentRegion = function() return 3 end
+    local keepUrl = NS.db.logsUrl
+    NS.db.logsUrl = "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}"   -- the new default
+    H.eq(R:LogsUrl("Kumlance"), "https://fresh.warcraftlogs.com/character/eu/living-flame/kumlance",
+         "realm and region from the client, as Warcraft Logs writes them")
+    _G.GetRealmName, _G.GetCurrentRegion = realRealm, realRegion
+    NS.db.logsUrl = keepUrl
+
+    H.section("review: joined, declined and invited")
+    R:ClearWithStatus(nil)
+    R:OnWhisper("hi, recruiting?", "Joiner")
+    R:OnWhisper("hi", "Decliner")
+    _G.ERR_GUILD_JOIN_S, _G.ERR_GUILD_DECLINE_S = "%s has joined the guild.", "%s declines your guild invitation."
+    R.frame:Fire("OnEvent", "CHAT_MSG_SYSTEM", "Joiner has joined the guild.")
+    H.ok(NS.db.responders.Joiner.status == "accepted" and NS.db.responders.Joiner.joinedAt,
+         "the game says they joined: Accepted, by itself")
+    R.frame:Fire("OnEvent", "CHAT_MSG_SYSTEM", "Decliner declines your guild invitation.")
+    H.eq(NS.db.responders.Decliner.status, "declined", "declined the invite: Declined")
+    R:OnWhisper("hi", "Invitee")
+    R:InviteToGuild("Invitee")
+    H.eq(NS.db.responders.Invitee.status, "invited", "invited is Invited - not Trial before they say yes")
+
+    H.section("review: a desk that forgets")
+    local now = os.time()
+    NS.db.responders = {
+        Old = { name = "Old", status = "contacted", timestamp = now - 40 * 86400 },
+        Trialist = { name = "Trialist", status = "trial", timestamp = now - 40 * 86400 },
+        Ancient = { name = "Ancient", status = "accepted", timestamp = now - 100 * 86400 },
+        Fresh = { name = "Fresh", status = "new", timestamp = now - 86400 },
+    }
+    H.eq(R:Tidy(now), 2, "a word a month ago, or anything three months ago, goes")
+    H.ok(NS.db.responders.Fresh and NS.db.responders.Trialist and not NS.db.responders.Old, "the rest stays")
+    NS.db.responders = {}
+    for i = 1, R.KEEP_MAX + 20 do NS.db.responders["P" .. i] = { name = "P" .. i, status = "new", timestamp = now - i } end
+    R:Tidy(now)
+    local n = 0
+    for _ in pairs(NS.db.responders) do n = n + 1 end
+    H.ok(n == R.KEEP_MAX and NS.db.responders.P1 and not NS.db.responders["P" .. (R.KEEP_MAX + 1)],
+         "never more than " .. R.KEEP_MAX .. ", the oldest going first")
+    NS.db.responders = {}
+
+    H.section("review: the auto-reply says the class we need, and launch day")
+    local ar = NS.db.autoReply
+    local keep = { ar.enabled, ar.mode, ar.busy, ar.skipGuildies }
+    ar.enabled, ar.mode, ar.skipGuildies = true, "any", false
+    NS.db.needs.shaman.resto = 2
+    before = #H.sent
+    R:OnWhisper("hi! resto shaman looking for a raiding guild", "Shammy")
+    H.ok(#H.sent == before + 1 and H.sent[#H.sent].msg:find("We need 2 Resto Shaman right now.", 1, true),
+         "a shaman asks: the reply says we need 2 Resto Shaman", H.sent[#H.sent] and H.sent[#H.sent].msg)
+    ar.busy, ar.mode = true, "keywords"
+    before = #H.sent
+    R:OnWhisper("hey", "Rushhour")
+    H.ok(#H.sent == before + 1 and H.sent[#H.sent].msg:find("swamped", 1, true), "launch-day mode: everyone, keywords or not")
+    ar.enabled, ar.mode, ar.busy, ar.skipGuildies = keep[1], keep[2], keep[3], keep[4]
+    NS.db.needs.shaman.resto = 0
+    R:ClearWithStatus(nil)
+    NS.db.previewMode = wasPreview
+end)()
 
 H.report()

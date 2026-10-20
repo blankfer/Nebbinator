@@ -1,4 +1,4 @@
-## Interface: 20506, 16001
+## Interface: 16001
 ## Title: |cffb980ffBiS>|rNebbinator
 ## Category: |cffb980ffBiS>|rAddons
 ## IconTexture: Interface\TargetingFrame\UI-RaidTargetingIcon_1
@@ -6,7 +6,7 @@
 ## Author: Arn
 ## Version: 3.6.1
 ## OptionalDeps: BiSTheme
-## SavedVariables: NebbinatorDB, NubbinatorDB
+## SavedVariables: NebbinatorDB
 ## DefaultState: enabled
 
 Libs\BiSTheme\Console.lua
