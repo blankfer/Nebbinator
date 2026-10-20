@@ -1,5 +1,33 @@
 # Nebbinator
 
+## 4.0.0
+
+Rebuilt for WoW Forever. TBC is no longer supported.
+
+**Recruiting as a guild**
+- **The guild's list.** Every recruit somebody in the guild is talking to is shared with the guild. Officers see a summary: who, how far along, who is talking to them, and the note. Everyone else sees only who is a recruit and who is talking to them. Nobody sees what a recruit whispered.
+- **Officers set what the guild needs.** Set them on Recruit, then press **Send to the guild** on the new Team page. Every Nebbinator in the guild takes the newest needs an officer sent, and the ad follows them.
+- **The party scout.** Group with somebody whose class the guild needs and you get a card asking you to ask them to raid with you. It is big and plays a sound when they have no guild, and small and quiet when they already have one. If somebody in the guild is already talking to them, the card says who and when ("nudge them to join"). You get one card per person per week. `/bisn scout` turns it off.
+- **Fenced into the guild.** Your save is shared by every character on the account, so each guild gets its own book: its needs, raid times, Discord, desk and recruit list. An alt in another guild never sees or shares your main's.
+- **BiS Guild** shows the guild's recruits and needs in its terminal, and **BiS Tools** puts a gold crest under any recruit you pass.
+
+**Forever fixes**
+- **The alert sounds play.** Forever ignored the old sound files, so they now use the game's own sound kits.
+- **A long ad posts one part per click.** Forever only lets a click post to a channel, so the second part of a long ad used to vanish. Now the button says "2/2" and the next click sends the rest.
+- **Chat lockdown is respected.** Inside instances and boss fights, a post tells you to wait. Whispers are held and sent the moment the game allows it, with a card showing how many are waiting.
+- **The logs link uses your own realm and region.**
+- **Joined, declined and invited are noticed.** The desk sees "X has joined the guild" and marks them accepted. A whisper reply can be marked invited.
+- **The desk forgets.** Rows untouched for a month go (anything after three months), and the desk never holds more than 300.
+- **Auto-reply knows what you need.** "We need 2 Resto Shaman right now" when they say they play one. There is also a launch-day mode that answers everyone.
+
+**One window**
+- **The house shape, 1.43:1, with tabs:** Desk, Team, Stats, Recruit, Message, Replies, About. The desk no longer grows with every whisper; it scrolls.
+- **Cards**, in the style of the SURVIVOR rally banner: the party scout, a working bar while `/who` looks someone up, and held whispers.
+- **What works:** the Stats page shows which channel, which ad and which time of day brings whispers. A reminder card in town offers to post the same ad again (Never / 10 / 15 / 30 min).
+- **`{nextraid}`** in an ad: the next raid from BiS Guild's pasted Raid-Helper event ("Wed 20:00").
+- **The minimap button is the family's.** Left click opens the window. Right click opens a menu with the pages and the auto-reply, party scout and preview switches. The star brightens while somebody new is waiting.
+- **NebbinatorAPI version 2:** other addons can read the guild's list, the needs, whether a player is a recruit, and what works.
+
 ## 3.6.1
 
 - **BiS addons can talk to other players on Forever again.** The game wrongly says addon messages are restricted, and the shared BiS code believed it, so nothing this addon sends to other players went out. It does now - and your guild's BiS Guild map shows where you are (outside instances; `/biscomm share off` turns that off).

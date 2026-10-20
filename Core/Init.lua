@@ -10,7 +10,7 @@ NS.ADDON_NAME    = ADDON
 -- spent v3 announcing itself as 2.0.1.
 NS.VERSION       = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version"))
                    or (GetAddOnMetadata and GetAddOnMetadata(ADDON, "Version")) or "dev"
-NS.DB_VERSION    = 3
+NS.DB_VERSION    = 4
 NS.CHAT_LIMIT    = 255
 
 --------------------------------------------------------------------
@@ -83,6 +83,10 @@ local function Defaults()
             playSound   = true,
             sound       = "bell",       -- deliberately not the ready-check sound
             soundOnlyNew = false,       -- false = ding on every message, not just first contact
+            -- 21 Oct 2026, the review:
+            classAware  = true,         -- "We need 2 Resto Shaman right now." when theirs is a class we need
+            busy        = false,        -- launch-day mode: everyone gets busyText, keywords or not
+            busyText    = "We're swamped with whispers right now! Everything is in our Discord: {discord} - an officer will whisper you back.",
         },
 
         -- Four canned whispers, one button each on every responder row.
@@ -94,101 +98,52 @@ local function Defaults()
         },
 
         -- {name} is the responder; {realm} and {region} fill themselves in.
-        logsUrl = "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}",
+        -- {name} is the responder; {realm} and {region} come from the client (21 Oct 2026: it said us and
+        -- dreamscythe for everybody). Warcraft Logs' Forever address is UNVERIFIED - it is a setting.
+        logsUrl = "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}",
 
         leadFinder = false,        -- watch channels for "LF guild" posts
         responders = {},
         minimap    = { hide = false, angle = 205 },
         window     = {},
-        uiTab      = "Recruit",
-        bookOpen   = false,        -- the tab rail is rolled up until asked for
+        uiTab      = "Desk",       -- the page the window opens on (the desk is a page since 21 Oct 2026)
         filter     = "all",
         hiddenChannels = {},       -- send buttons right-clicked off the desk
+        -- 21 Oct 2026, the review:
+        scout      = true,         -- the party scout's cards (Core/Scout.lua)
+        scoutSeen  = {},           -- name -> when a card last asked about them
+        remind     = 15,           -- minutes after a post to remind you, in a city (0 = never)
+        stats      = { posts = {}, whispers = {} },   -- what works (Core/Stats.lua)
+        officerRank = 1,           -- guild ranks 0..this are officers (BiS Guild's rule, the same number)
+        team       = {},           -- the guild's list of prospects (Core/Team.lua)
+        guilds     = {},           -- every other guild's book, parked (Core/Fence.lua)
     }
 end
 
---------------------------------------------------------------------
--- Migration from the 1.x saved variables
---------------------------------------------------------------------
-
-local V1_SPEC_MAP = {
-    warrior = { prot = "prot",  dps = "fury"  },
-    paladin = { prot = "prot",  holy = "holy", ret = "ret" },
-    priest  = { holy = "holy",  shadow = "shadow" },
-    shaman  = { ele = "ele",    resto = "resto", enh = "enh" },
-    druid   = { resto = "resto", boomie = "balance", tank = "feral", feral = "cat" },
-    mage    = { dps = "dps" },
-    warlock = { dps = "dps" },
-    hunter  = { dps = "dps" },
-    rogue   = { dps = "dps" },
-}
-
-local function MigrateV1(old)
-    local new = Defaults()
-    if type(old) ~= "table" then return new end
-
-    if type(old.needs) == "table" then
-        for classKey, specs in pairs(old.needs) do
-            local map = V1_SPEC_MAP[classKey]
-            if map and type(specs) == "table" then
-                for oldSpec, count in pairs(specs) do
-                    local newSpec = map[oldSpec]
-                    if newSpec and new.needs[classKey] and type(count) == "number" then
-                        new.needs[classKey][newSpec] = count
-                    end
-                end
-            end
-        end
-    end
-
-    if type(old.raidTimes) == "table" then
-        for dayKey, value in pairs(old.raidTimes) do
-            if new.raidTimes[dayKey] ~= nil and type(value) == "string" then
-                new.raidTimes[dayKey] = value
-            end
-        end
-    end
-
-    new.preText     = type(old.preText) == "string" and old.preText or ""
-    new.postText    = type(old.postText) == "string" and old.postText or ""
-    new.previewMode = old.previewMode and true or false
-    new.responders  = type(old.responders) == "table" and old.responders or {}
-
-    -- Rebuild the 1.x message shape as a template so nothing is lost.
-    if new.preText ~= "" or new.postText ~= "" then
-        local parts = {}
-        if new.preText ~= ""  then table.insert(parts, "{pre}")  end
-        table.insert(parts, "{needs}")
-        table.insert(parts, "Raid Times: {times}")
-        if new.postText ~= "" then table.insert(parts, "{post}") end
-        table.insert(new.templates, 1, { name = "Migrated (v1)", text = table.concat(parts, " - ") })
-        new.activeTemplate = 1
-    end
-
-    return new
-end
+NS.Defaults = Defaults          -- Core/Fence.lua fills a new guild's book from these
 
 --------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------
 
 function NS:LoadDB()
-    -- 1.x shipped as NubbinatorDB; keep reading it so upgrades are seamless.
-    local saved = _G.NebbinatorDB or _G.NubbinatorDB
-
+    -- FOREVER ONLY (Arn, 21 Oct 2026: "this is a forever addon no more tbc support"). Forever keeps its
+    -- own WTF folder, so nothing from the TBC 1.x/2.x days (NubbinatorDB) can be on this client: the old
+    -- migration went. A beta save from 3.x fills in whatever is new.
+    local saved = _G.NebbinatorDB
     if type(saved) ~= "table" or next(saved) == nil then
         saved = Defaults()
-    elseif (saved.dbVersion or 1) < 2 then
-        saved = MigrateV1(saved)
-        NS.migratedThisSession = true
-    elseif (saved.dbVersion or 1) < NS.DB_VERSION then
-        -- v2 -> v3 only added keys; ApplyDefaults fills them in
-        saved = NS.Util.ApplyDefaults(saved, Defaults())
-        saved.windows = nil
     else
         saved = NS.Util.ApplyDefaults(saved, Defaults())
+        saved.windows = nil
+        -- the old fixed logs address becomes the one that reads your realm and region
+        if saved.logsUrl == "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}" then
+            saved.logsUrl = Defaults().logsUrl
+        end
     end
 
+    -- the desk became the window's first page (21 Oct 2026): a 3.x save opens on it, not on Recruit
+    if (tonumber(saved.dbVersion) or 0) < 4 then saved.uiTab, saved.bookOpen = "Desk", nil end
     saved.dbVersion = NS.DB_VERSION
     _G.NebbinatorDB = saved
     self.db = saved
@@ -277,6 +232,35 @@ function NS.SetDiscord(link)
     NS.UI:Refresh()
 end
 
+function NS.ToggleClassAware()
+    NS.db.autoReply.classAware = not NS.db.autoReply.classAware
+    NS.UI:Refresh()
+end
+
+function NS.ToggleBusy()
+    NS.db.autoReply.busy = not NS.db.autoReply.busy
+    NS.Say("launch-day mode " .. (NS.db.autoReply.busy and "on - everyone gets the busy reply" or "off"),
+        NS.db.autoReply.busy and "gold" or "ink2")
+    NS.UI:Refresh()
+end
+
+function NS.SetRemind(mins)
+    NS.db.remind = math.max(0, math.min(60, tonumber(mins) or 0))
+    NS.UI:Refresh()
+end
+
+function NS.SetOfficerRank(n)
+    NS.db.officerRank = math.max(0, math.min(9, tonumber(n) or 1))
+    NS.Responders.rosterDirty = true
+    NS.UI:Refresh()
+end
+
+function NS.ToggleScout()
+    NS.db.scout = not NS.db.scout
+    NS.Say("party scout " .. (NS.db.scout and "on" or "off"), NS.db.scout and "good" or "warn")
+    NS.UI:Refresh()
+end
+
 function NS.ToggleMinimap()
     NS.db.minimap.hide = not NS.db.minimap.hide
     NS.Minimap:Update()
@@ -326,18 +310,15 @@ end
 
 function NS:Initialize()
     self:LoadDB()
+    NS.Fence.Settle()                       -- this guild's book live, nobody else's (Core/Fence.lua)
 
     NS.Message:Initialize()
     NS.Responders:Initialize()
     NS.Comm.Boot()
+    if NS.Team then NS.Team.Boot() end      -- the guild's desk and needs (Core/Team.lua)
     NS.UI:Initialize()
     NS.Minimap:Initialize()
 
-    -- the window says hello in its own prompt; chat only speaks when the
-    -- upgrade actually moved somebody's settings
-    if NS.migratedThisSession then
-        NS.Util.Print("upgraded your old settings - needs, raid times and responders were kept.")
-    end
     NS.Say("ready", "good")
 end
 
@@ -351,8 +332,8 @@ local function HandleSlash(msg)
 
     if cmd == "" or cmd == "show" then
         NS.UI:Toggle()
-    elseif cmd == "r" or cmd == "responders" then
-        NS.UI:Toggle()
+    elseif cmd == "r" or cmd == "responders" or cmd == "desk" then
+        NS.UI:Toggle("Desk")
     elseif cmd == "config" or cmd == "options" or cmd == "settings" then
         NS.UI:ToggleOptions()
     elseif cmd == "book" then
@@ -383,6 +364,9 @@ local function HandleSlash(msg)
             NS.Util.Print("Discord link: " .. (NS.db.discord ~= "" and NS.db.discord
                 or NS.T.text("warn", "not set")))
         end
+    elseif cmd == "scout" then
+        NS.ToggleScout()
+        NS.Util.Print("Party scout " .. (NS.db.scout and NS.T.text("good", "ON") or NS.T.text("warn", "OFF")))
     elseif cmd == "minimap" then
         NS.ToggleMinimap()
         NS.Util.Print("Minimap button " .. (NS.db.minimap.hide and "hidden" or "shown"))
@@ -396,6 +380,7 @@ local function HandleSlash(msg)
         print("  " .. NS.T.text("accent", "/bisn config") .. " - open the options window")
         print("  " .. NS.T.text("accent", "/bisn preview") .. " - toggle preview (test) mode")
         print("  " .. NS.T.text("accent", "/bisn reply") .. " - toggle auto-reply")
+        print("  " .. NS.T.text("accent", "/bisn scout") .. " - toggle the party scout's cards")
         print("  " .. NS.T.text("accent", "/bisn discord <link>") .. " - set the Discord invite")
         print("  " .. NS.T.text("accent", "/bisn channels <a, b>") .. " - extra channels to post to")
         print("  " .. NS.T.text("accent", "/bisn minimap") .. " - show or hide the minimap button")

@@ -1,33 +1,29 @@
 -- Nebbinator :: UI/Desk.lua
 --
--- The working window. BiSJC's desk shape: a one-line row per responder, click
--- one to serve them, and only the served one opens up with the buttons. The
--- window is as tall as the list and no taller, so it grows as whispers land and
--- shrinks again as they are dealt with.
---
--- Everything that is not "who is waiting" lives in the book (the tab rail),
--- which is rolled up until the header's list button is pressed.
+-- The desk, the window's first page. BiSJC's desk shape: a one-line row per responder, click one to serve
+-- them, and only the served one opens up with the buttons. Until 21 Oct 2026 the desk WAS the window and
+-- grew with every whisper; now the window keeps its 1.43:1 shape and the list fills the page and scrolls.
 
 local ADDON, NS = ...
 local K  = NS.Kit
 local UI = NS.UI
 
 UI.ROW_H     = 16     -- one queue line
-UI.MAX_ROWS  = 10     -- past this the list scrolls instead of growing
+UI.MAX_ROWS  = 10     -- the rows the list shows, set by LayoutDesk from the room the page has
 UI.SERVED_H  = 82     -- the opened-up block for whoever is served
 UI.FOOT_H    = 26
 UI.CLOCK_W   = 22     -- room a send button reserves for its corner clock
 
 local FILTERS = {
     { key = "all", label = "All" }, { key = "new", label = "New" },
-    { key = "contacted", label = "Contacted" }, { key = "trial", label = "Trial" },
+    { key = "contacted", label = "Contacted" }, { key = "invited", label = "Invited" }, { key = "trial", label = "Trial" },
     { key = "accepted", label = "Accepted" }, { key = "declined", label = "Declined" },
 }
 
-local STATUS_ORDER = { "new", "contacted", "trial", "accepted", "declined" }
+local STATUS_ORDER = { "new", "contacted", "invited", "trial", "accepted", "declined" }
 
 local STATUS_TONE = {
-    new = "gold", contacted = "slate", trial = "accent",
+    new = "gold", contacted = "slate", invited = "accent", trial = "accent",
     accepted = "good", declined = "warn",
 }
 
@@ -54,11 +50,11 @@ end
 -- build
 --------------------------------------------------------------------
 
-function UI:BuildDesk(f)
-    local desk = CreateFrame("Frame", nil, f)
-    desk:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -self.HEADER)
-    desk:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -self.HEADER)
-    desk:SetHeight(1)
+function UI:BuildDesk(page)
+    local desk = CreateFrame("Frame", nil, page)
+    desk:SetPoint("TOPLEFT", page, "TOPLEFT", 0, 0)
+    desk:SetPoint("TOPRIGHT", page, "TOPRIGHT", 0, 0)
+    desk:SetHeight(self.DESK_H())
     self.desk = desk
     self.rows = {}
     self.filter = NS.db.filter or "all"
@@ -241,6 +237,9 @@ end
 -- layout: the whole point of the desk
 --------------------------------------------------------------------
 
+--- The desk page's height: the window under its header, less the body's top hairline.
+function UI.DESK_H() return UI.H - UI.HEADER - 2 end
+
 function UI:LayoutDesk()
     if not self.desk then return end
 
@@ -263,21 +262,21 @@ function UI:LayoutDesk()
     self.logsLabel:SetPoint("RIGHT", self.logsBox, "LEFT", -5, 0)
     top = top + 16
 
-    -- An empty desk is the SMALLEST desk: no list area at all, and the count
-    -- line carries the hint. Otherwise the first whisper would SHRINK the
-    -- window, which is the opposite of what it is meant to do.
+    -- The list takes the room the page has left: the served block (when somebody is served) and the
+    -- footer below it, the rest rows. An empty desk shows no list; the count line carries the hint.
     local list = NS.Responders:SortedList(self.filter)
-    local shown = math.min(#list, self.MAX_ROWS)
-    local listH = shown * self.ROW_H
+    local servedName = self:ServedName()
+    local room = self.DESK_H() - top - 4 - (servedName and self.SERVED_H or 0) - self.FOOT_H
+    self.MAX_ROWS = math.max(3, math.floor(room / self.ROW_H))
+    local listH = self.MAX_ROWS * self.ROW_H
 
     self.listHost:ClearAllPoints()
     self.listHost:SetPoint("TOPLEFT", self.desk, "TOPLEFT", 8, -top)
     self.listHost:SetPoint("TOPRIGHT", self.desk, "TOPRIGHT", -8, -top)
-    self.listHost:SetHeight(math.max(1, listH))
-    if shown > 0 then self.listHost:Show() else self.listHost:Hide() end
+    self.listHost:SetHeight(listH)
+    if #list > 0 then self.listHost:Show() else self.listHost:Hide() end
     top = top + listH + 4
 
-    local servedName = self:ServedName()
     if servedName then
         self.served:ClearAllPoints()
         self.served:SetPoint("TOPLEFT", self.desk, "TOPLEFT", 0, -top)
@@ -294,7 +293,7 @@ function UI:LayoutDesk()
     self.clearAll:SetPoint("LEFT", self.clearDeclined, "RIGHT", 5, 0)
     top = top + self.FOOT_H
 
-    self.desk:SetHeight(top)
+    self.deskUsed = top                      -- what the parts add up to (the suite holds it inside the page)
     self:RefreshDesk()
     self:Relayout()
 end

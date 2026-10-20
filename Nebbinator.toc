@@ -1,25 +1,31 @@
-## Interface: 20506, 16001
+## Interface: 16001
 ## Title: |cffb980ffBiS>|rNebbinator
 ## Category: |cffb980ffBiS>|rAddons
 ## IconTexture: Interface\TargetingFrame\UI-RaidTargetingIcon_1
-## Notes: Guild recruitment in one window: build the ad, post it, and work everyone who whispers back.
+## Notes: Guild recruitment for the whole guild: the ad, the desk, the guild's shared list of recruits and the party scout.
 ## Author: Arn
-## Version: 3.6.1
+## Version: 4.0.0
 ## OptionalDeps: BiSTheme
-## SavedVariables: NebbinatorDB, NubbinatorDB
+## SavedVariables: NebbinatorDB
 ## DefaultState: enabled
 
 Libs\BiSTheme\Console.lua
 Libs\BiSTheme\Options.lua
+Libs\BiSTheme\Minimap.lua
 Libs\LibBiSComm-1.0\LibBiSComm-1.0.lua
 
 Core\Util.lua
 Core\Init.lua
+Core\Fence.lua
 Core\Message.lua
 Core\Responders.lua
+Core\Team.lua
+Core\Stats.lua
+Core\Scout.lua
 API.lua
 
 UI\Kit.lua
+UI\Cards.lua
 UI\Window.lua
 UI\SendBar.lua
 UI\Desk.lua
@@ -27,5 +33,7 @@ UI\Options.lua
 UI\Pages\Recruit.lua
 UI\Pages\Message.lua
 UI\Pages\Replies.lua
+UI\Pages\Team.lua
+UI\Pages\Stats.lua
 UI\Pages\About.lua
 UI\Minimap.lua

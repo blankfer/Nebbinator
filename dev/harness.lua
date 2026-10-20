@@ -321,6 +321,7 @@ H.say = realprint
 _G.wipe = function(t) for k in pairs(t) do t[k] = nil end return t end
 _G.tinsert = table.insert
 _G.time = os.time
+_G.date = os.date      -- the client has date() too
 _G.GetServerTime = os.time      -- the client has it on every build; the API answers in it
 H.clock = 1000
 _G.GetTime = function() return H.clock end
@@ -344,14 +345,71 @@ function H.RunTimers()
     for _, t in ipairs(list) do t.fn() end
 end
 
-_G.UnitName = function() return "Kumlust" end
+-- A group unit is somebody in H.raid ({ name, class, guild, role, ours }): "raidN" is H.raid[N], and
+-- "partyN" is H.raid[N + 1] - the client numbers a party WITHOUT you (party1..4) and a raid WITH you.
+function H.Member(unit)
+    unit = tostring(unit)
+    if unit == "player" then return H.raid[1] end
+    local r = unit:match("^raid(%d+)$")
+    if r then return H.inRaid and H.raid[tonumber(r)] or nil end
+    local p = unit:match("^party(%d+)$")
+    if p then return (H.inParty and not H.inRaid) and tonumber(p) <= 4 and H.raid[tonumber(p) + 1] or nil end
+    return nil
+end
+-- FOREVER'S NAMES (measured 18 Oct 2026): UnitName is the FIRST name ("Chain"), GetUnitName(unit, false) the
+-- whole one ("Chain Healz"). An H.raid entry's `name` is the whole name; the player's is H.raid[1]'s.
+_G.UnitName = function(unit)
+    local m = H.Member(unit or "player")
+    local whole = m and m.name or "Kumlust"
+    return (whole:match("^(%S+)") or whole)
+end
+_G.GetUnitName = function(unit)
+    local m = H.Member(unit or "player")
+    return m and m.name or "Kumlust"
+end
+_G.UnitClass = function(unit)
+    local m = H.Member(unit or "player")
+    local file = (m and m.class) or "MAGE"
+    return file:sub(1, 1) .. file:sub(2):lower(), file
+end
+-- "NONE" unless the group finder gave them one - the client's answer for a group you made yourself
+_G.UnitGroupRolesAssigned = function(unit)
+    local m = H.Member(unit)
+    return (m and m.role) or "NONE"
+end
+_G.UnitIsUnit = function(a, b)
+    local ma, mb = H.Member(a), H.Member(b)
+    return ma ~= nil and ma == mb
+end
+_G.UnitIsInMyGuild = function(unit)
+    local m = H.Member(unit)
+    return m ~= nil and (m == H.raid[1] or m.ours == true)
+end
+H.resting = true
+_G.IsResting = function() return H.resting end
 _G.UnitLevel = function() return 70 end
 _G.GetRealmName = function() return "Dreamscythe" end
 _G.UnitFactionGroup = function() return "Alliance" end
-_G.GetGuildInfo = function() return "The Heathens" end
-_G.IsInGuild = function() return true end
-_G.GetNumGuildMembers = function() return 1 end
-_G.GetGuildRosterInfo = function() return "Kumlust" end
+-- nil for a groupmate without a guild (the client's answer), ours for the player and any other unit
+-- H.myGuild: this character's guild (nil = none); H.guildLate: in one, but the game has not said which yet
+-- (the client answers nil for a few seconds after login). H.myGuildRealm: a guild from another realm.
+H.myGuild = "The Heathens"
+_G.GetGuildInfo = function(unit)
+    local m = unit and unit ~= "player" and H.Member(unit)
+    if m then return m.guild end
+    if not H.myGuild or H.guildLate then return nil end
+    return H.myGuild, "Member", 4, H.myGuildRealm
+end
+_G.IsInGuild = function() return H.myGuild ~= nil end
+-- the roster: name-realm, rank name, rank index (0 = guild master) - as the client answers
+H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+H.RANKS = { [0] = "Guild Master", "Officer", "Veteran", "Raider", "Member" }
+_G.GetNumGuildMembers = function() return #H.guild end
+_G.GetGuildRosterInfo = function(i)
+    local m = H.guild[i]
+    if not m then return nil end
+    return m.name, H.RANKS[m.rank] or "Member", m.rank
+end
 _G.C_GuildInfo = { GuildRoster = function() end }
 _G.CanGuildInvite = function() return true end
 _G.GuildInvite = function(n) H.guildInvited = n end
@@ -369,9 +427,13 @@ _G.GetChannelList = function()
            4, "LookingForGroup", false,
            5, "GuildRecruitment", false
 end
+-- id, full name - by name or by number, as the client answers (0 and nothing for a channel you are not in)
+H.CHANNELS = { "General - Shattrath City", "Trade - City", "LocalDefense", "LookingForGroup", "GuildRecruitment" }
 _G.GetChannelName = function(n)
     local map = { general = 1, trade = 2, localdefense = 3, lookingforgroup = 4, guildrecruitment = 5 }
-    return map[tostring(n):lower()] or 0
+    local id = tonumber(n) or map[tostring(n):lower()] or 0
+    if not H.CHANNELS[id] then return 0 end
+    return id, H.CHANNELS[id]
 end
 _G.SendChatMessage = function(msg, chatType, lang, target)
     H.sent[#H.sent + 1] = { msg = msg, chatType = chatType, target = target }
@@ -412,12 +474,11 @@ end
 _G.RegisterAddonMessagePrefix = function(p) H.prefix = p return true end
 
 _G.IsInRaid = function() return H.inRaid end
-_G.IsInGroup = function() return H.inRaid end
-_G.GetNumGroupMembers = function() return H.inRaid and #H.raid or 0 end
+_G.IsInGroup = function() return H.inRaid or H.inParty end
+_G.GetNumGroupMembers = function() return (H.inRaid or H.inParty) and #H.raid or 0 end
 _G.UnitExists = function(unit)
     if unit == "player" then return true end
-    local i = tostring(unit):match("^raid(%d+)$") or tostring(unit):match("^party(%d+)$")
-    return i ~= nil and H.raid[tonumber(i)] ~= nil
+    return H.Member(unit) ~= nil
 end
 _G.UnitIsPlayer = function() return true end
 _G.UnitPosition = function() return 1000, 1000, 0, 530 end
@@ -434,10 +495,11 @@ _G.GetAddOnMetadata = function(_, key) return key == "Version" and "test" or nil
 --------------------------------------------------------------------
 
 local ALLOWED_GLOBALS = {
-    Nebbinator = true, NebbinatorDB = true, NubbinatorDB = true,
+    Nebbinator = true, NebbinatorDB = true,
     SLASH_NEBBINATOR1 = true, SLASH_NEBBINATOR2 = true, SLASH_NEBBINATOR3 = true,
     SLASH_NEBBINATOR4 = true,
-    NebbinatorFrame = true, NebbinatorCopyBox = true, NebbinatorMinimapButton = true,
+    NebbinatorFrame = true, NebbinatorCopyBox = true,
+    BiSMinimapNebbinator = true,     -- the shared minimap button (Libs\BiSTheme\Minimap.lua) names itself
     HARNESS = true, print = true,
     NebbinatorAPI = true,            -- API.lua: the one door other addons use (playbook 5a)
     -- shared, embedded, and global by design

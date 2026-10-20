@@ -17,23 +17,23 @@ local K = NS.Kit
 local UI = {}
 NS.UI = UI
 
--- The desk is the window. The book (the tab rail and its pages) rolls up out of
--- sight until you ask for it, and the frame is only ever as tall as what is on
--- show: header + desk + (book).
-UI.DESK_W    = 620          -- rolled up: just the queue
-UI.BOOK_W    = 820          -- unrolled: room for the rail and the pages
-UI.BOOK_H    = 500
-UI.W         = 820          -- pages are laid out for the wide state, always
-UI.H         = 660
+-- ONE SHAPE (21 Oct 2026, the rebuild): the house's 1.43:1 window (BiSTheme's standard), the tab rail
+-- down the left and a page beside it. The desk is the first page; it used to be the window itself, which
+-- grew with every whisper and rolled a "book" of the other pages out under it - two shapes, neither 1.43.
+-- Now the frame never changes size: a long desk scrolls.
+UI.W         = 820
+UI.H         = 574          -- 820 / 1.43
 UI.HEADER    = 16   -- K.HEADER, the house bar
 UI.SIDEBAR   = 168
-UI.STRIP     = 43   -- header buttons: x(12) at -3, =(12) at -17, o(12) at -31 -> -3..-43
+UI.DESK_W    = UI.W - UI.SIDEBAR - 2      -- the desk page: the body, edge to edge (650)
+UI.STRIP     = 29   -- header buttons: x(12) at -3, o(12) at -17 -> -3..-29
 UI.ROW       = 30
 UI.controls  = {}
 UI.actions   = {}
 UI.pages     = {}
 UI.tabs      = {}
-UI.PAGES     = { "Recruit", "Message", "Replies", "About" }
+UI.PAGES     = { "Desk", "Team", "Stats", "Recruit", "Message", "Replies", "About" }
+UI.EDGE_TO_EDGE = { Desk = true }      -- pages drawn to the body's edge (the desk has its own margins)
 
 function UI.colW(page)
     return (page and page.colW) or (UI.W - UI.SIDEBAR - 56)
@@ -316,6 +316,8 @@ function UI:Refresh()
     if self.RefreshQuick then self:RefreshQuick() end
     if self.RefreshMessageHints then self:RefreshMessageHints() end
     if self.RefreshAbout then self:RefreshAbout() end
+    if self.RefreshTeam then self:RefreshTeam() end
+    if self.RefreshStats then self:RefreshStats() end
     if self.RefreshOptions then self:RefreshOptions() end
 end
 
@@ -366,67 +368,37 @@ function UI:Build()
     end
 
     self:BuildHeader(f)
-    self:BuildDesk(f)
-    self:BuildBook(f)
+    self:BuildBook(f)          -- the rail and every page, the desk among them
 
     if UISpecialFrames then table.insert(UISpecialFrames, "NebbinatorFrame") end
 
-    self.bookOpen = NS.db.bookOpen and true or false
-    self:ShowTab(NS.db.uiTab or self.PAGES[1])
+    self:ShowTab(self.pages[NS.db.uiTab or ""] and NS.db.uiTab or self.PAGES[1])
     self:LayoutDesk()
     f:Hide()
     return f
 end
 
 --------------------------------------------------------------------
--- rolling the book up and down
+-- the desk and the rest
 --------------------------------------------------------------------
 
+--- `/bisn book` and the minimap's right click, from when the other pages rolled out under the desk: now
+--- they step between the desk and the page you were last on (Recruit the first time).
 function UI:ToggleBook(open)
-    if open == nil then open = not self.bookOpen end
-    self.bookOpen = open and true or false
-    NS.db.bookOpen = self.bookOpen
-    self:Relayout()
+    if open == nil then open = (self.shown == "Desk") end
+    if open then
+        self:ShowTab(self.pages[NS.db.bookTab or ""] and NS.db.bookTab or "Recruit")
+    else
+        self:ShowTab("Desk")
+    end
 end
 
--- One place decides how big the window is: header + desk + whatever the book
--- is worth right now. Called on every change that can alter either.
+--- The window's size, the same always. (It used to be decided here by the desk's height - and once re-anchored
+--- to `top - height`, which dropped the window by its own height on every call: Arn, 10 Sep, "every time I
+--- right click to pin or unpin it shifts the window down". Nothing moves it now but a drag.)
 function UI:Relayout()
     if not self.frame then return end
-
-    local deskH = (self.desk and self.desk:GetHeight()) or 1
-    local width = self.bookOpen and self.BOOK_W or self.DESK_W
-    local height = self.HEADER + deskH + (self.bookOpen and self.BOOK_H or 0)
-
-    if self.book then
-        if self.bookOpen then
-            self.book:ClearAllPoints()
-            self.book:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 0, -(self.HEADER + deskH))
-            self.book:SetPoint("TOPRIGHT", self.frame, "TOPRIGHT", 0, -(self.HEADER + deskH))
-            self.book:SetHeight(self.BOOK_H)
-            self.book:Show()
-        else
-            self.book:Hide()
-        end
-    end
-
-    if self.bookBtn then self.bookBtn:SetMarked(self.bookOpen) end
-
-    -- Grow downward from wherever the window was put: pin the top-left corner
-    -- where it already was and let the height run down from it.
-    --
-    -- `SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, y)` puts the frame's
-    -- TOP edge at y. This said `top - height`, which dropped the window by its
-    -- own height on EVERY relayout - Arn saw it as "every time I right click to
-    -- pin or unpin it shifts the window down", but a whisper landing did it too.
-    local top, left = self.frame:GetTop(), self.frame:GetLeft()
-    self.frame:SetWidth(width)
-    self.frame:SetHeight(height)
-    if top and left then
-        self.frame:ClearAllPoints()
-        self.frame:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", left, top)
-        NS.db.window = { point = "TOPLEFT", relPoint = "BOTTOMLEFT", x = left, y = top }
-    end
+    self.frame:SetSize(self.W, self.H)
 end
 
 function UI:BuildHeader(f)
@@ -458,13 +430,9 @@ function UI:BuildHeader(f)
     self.closeBtn = K.HeaderButton(head, -3, "x", "Close",
         "/bisn brings it back.", function() UI:Hide() end, "warn")
 
-    self.bookBtn = K.HeaderButton(head, -17, "=", "The rest of it",
-        "Needs, raid times, templates and replies. Rolls back up when you are done.",
-        function() UI:ToggleBook() end)
-
     -- Settings used to be a tab in the book. It is its own window now, the same
     -- one every BiS addon wears -- see UI/Options.lua.
-    self.optBtn = K.HeaderButton(head, -31, "o", "Options",
+    self.optBtn = K.HeaderButton(head, -17, "o", "Options",
         "Sounds, cooldown, auto-reply, the minimap button. Also /bisn config.",
         function() UI:ToggleOptions() end)
 
@@ -520,8 +488,7 @@ function UI:BuildBook(f)
     local book = CreateFrame("Frame", nil, f)
     book:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -self.HEADER)
     book:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -self.HEADER)
-    book:SetHeight(self.BOOK_H)
-    book:Hide()
+    book:SetHeight(self.H - self.HEADER)
     self.book = book
 
     local top = K.hairline(book, "edge")
@@ -570,8 +537,13 @@ function UI:BuildBook(f)
         self.tabs[name] = tab
 
         local page = CreateFrame("Frame", nil, body)
-        page:SetPoint("TOPLEFT", body, "TOPLEFT", 22, -18)
-        page:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -22, 16)
+        if self.EDGE_TO_EDGE[name] then
+            page:SetPoint("TOPLEFT", body, "TOPLEFT", 0, 0)
+            page:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", 0, 0)
+        else
+            page:SetPoint("TOPLEFT", body, "TOPLEFT", 22, -18)
+            page:SetPoint("BOTTOMRIGHT", body, "BOTTOMRIGHT", -22, 16)
+        end
         pcall(page.SetClipsChildren, page, true)
         page:Hide()
         local builder = self["Build" .. name]
@@ -584,6 +556,8 @@ function UI:ShowTab(name)
     if not self.frame or not self.pages[name] then return end
     self.shown = name
     NS.db.uiTab = name
+    if name ~= "Desk" then NS.db.bookTab = name end
+    self.bookOpen = (name ~= "Desk")
     for tabName, tab in pairs(self.tabs) do
         local on = (tabName == name)
         if on then
@@ -600,13 +574,11 @@ function UI:ShowTab(name)
     self:Refresh()
 end
 
--- `tab` names a page in the book, so asking for one unrolls it.
+-- `tab` names a page to open on ("Responders" is the desk's old name)
 function UI:Open(tab)
     self:Build()
-    if tab then
-        self:ShowTab(tab)
-        self:ToggleBook(true)
-    end
+    if tab == "Responders" then tab = "Desk" end
+    if tab then self:ShowTab(tab) end
     self:LayoutDesk()
     self.frame:Show()
 end
@@ -617,10 +589,10 @@ end
 
 function UI:Toggle(tab)
     self:Build()
+    if tab == "Responders" then tab = "Desk" end
     if self.frame:IsShown() then
-        if tab and not (self.bookOpen and self.shown == tab) then
+        if tab and self.shown ~= tab then
             self:ShowTab(tab)
-            self:ToggleBook(true)
         else
             self:Hide()
         end

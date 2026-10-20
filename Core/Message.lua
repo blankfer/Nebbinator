@@ -10,8 +10,45 @@ local M = NS.Message
 function M:Initialize()
     self.lastSend = {}      -- [targetKey] = timestamp
     self.lastAny  = 0
-    self.queue    = {}
+    self.queue    = {}      -- whispers held while the game holds chat back (M:Locked)
     self.sending  = false
+    self.pending  = {}      -- [targetKey] = { segments, next } - the rest of a long ad, a click each
+end
+
+--- IS THE GAME HOLDING CHAT BACK? (21 Oct 2026, the review.) On Forever an addon may not send chat while
+--- C_ChatInfo.InChatMessagingLockdown() says so (inside instances, around boss fights). Sending then fails;
+--- so a post says so, and a whisper waits (M:Flush) until the game lets it go.
+function M:Locked()
+    local fn = C_ChatInfo and C_ChatInfo.InChatMessagingLockdown
+    if not fn then return false end
+    local ok, locked = pcall(fn)
+    if not ok or U.Hidden(locked) then return true end
+    return locked == true
+end
+
+M.FLUSH_EVERY, M.FLUSH_FOR = 5, 600   -- look again every 5 s; a whisper older than 10 min is dropped
+
+--- Send the whispers that waited, once the game allows chat again.
+function M:Flush()
+    self.flushing = nil
+    if #self.queue == 0 then return 0 end
+    if self:Locked() then
+        self.flushing = true
+        C_Timer.After(self.FLUSH_EVERY, function() M:Flush() end)
+        return 0
+    end
+    local now, sent = GetTime(), 0
+    local list = self.queue
+    self.queue = {}
+    if NS.Cards then NS.Cards.Done("held") end
+    for _, w in ipairs(list) do
+        if now - w.at <= self.FLUSH_FOR then
+            self:SendWhisper(w.name, w.text)
+            sent = sent + 1
+        end
+    end
+    if sent > 0 then NS.Say(sent .. " held whisper" .. (sent == 1 and "" or "s") .. " sent", "good") end
+    return sent
 end
 
 --------------------------------------------------------------------
@@ -40,6 +77,20 @@ function M:NeedsText(short)
         end
     end
     return table.concat(parts, ", ")
+end
+
+--- What we need of one class, as words ("2 Resto Shaman"), or nil when none (R:NeedFor, the scout).
+function M:NeedsOf(class)
+    local counts = NS.db.needs[class.key]
+    if not counts then return nil end
+    local parts = {}
+    for _, spec in ipairs(class.specs) do
+        local n = tonumber(counts[spec.key]) or 0
+        if n > 0 then
+            parts[#parts + 1] = (#class.specs == 1) and (n .. " " .. class.name) or (n .. " " .. spec.name .. " " .. class.name)
+        end
+    end
+    return #parts > 0 and table.concat(parts, ", ") or nil
 end
 
 function M:RoleCounts()
@@ -105,13 +156,30 @@ function M:Tokens()
         healers        = tostring(healers),
         dps            = tostring(dps),
         total          = tostring(tanks + healers + dps),
+        nextraid       = self:NextRaid(),
     }
+end
+
+--- {nextraid}: the raid pasted into BiS Guild ("Wed 20:00"), or "" without one (or without BiS Guild).
+function M:NextRaid()
+    local api = _G.BiSGuildAPI
+    if not (api and api.RaidNight) then return "" end
+    local ok, e = pcall(api.RaidNight)
+    if not ok or type(e) ~= "table" then return "" end
+    local now = (GetServerTime and GetServerTime()) or time()
+    if tonumber(e.start) then
+        if e.start < now - 4 * 3600 then return "" end            -- over: not an invitation any more
+        if e.start - now < 6 * 86400 then
+            return date("%a", e.start) .. " " .. (e.time or date("%H:%M", e.start))
+        end
+    end
+    return U.Trim(((e.date or "") .. " " .. (e.time or "")))
 end
 
 NS.TOKEN_HELP = {
     "{needs}", "{needs:short}", "{times}", "{times:full}", "{guild}",
     "{discord}", "{content}", "{tanks}", "{healers}", "{dps}", "{total}",
-    "{pre}", "{post}", "{player}", "{level}", "{realm}", "{faction}",
+    "{pre}", "{post}", "{player}", "{level}", "{realm}", "{faction}", "{nextraid}",
 }
 
 --------------------------------------------------------------------
@@ -218,14 +286,25 @@ function M:CanSend(chatType, target)
     return true
 end
 
-function M:Send(chatType, target)
-    local message, missing = self:Build()
+-- POSTING NEEDS A CLICK, EACH PART (21 Oct 2026, the review). On the modern engine a public channel (and
+-- say and yell) only takes a message sent straight from a click. A long ad's second part used to follow a
+-- second later on a timer - which the game refuses. So the click sends part one, and the same button then
+-- says "2/2" and sends the next part on the next click. Party, raid, guild and whispers take timers fine.
+M.CLICK_ONLY = { CHANNEL = true, SAY = true, YELL = true }
 
-    if message == "" then
-        NS.Say("nothing to send", "warn")
-        return
+--- The rest of a long ad waiting on this button: "2/3", or nil.
+function M:PendingFor(chatType, target)
+    if chatType == "CHANNEL" then
+        local id = GetChannelName(target)
+        if not id or id == 0 then return nil end
+        target = id
     end
+    local p = self.pending[TargetKey(chatType, target)]
+    if not p then return nil end
+    return ("%d/%d"):format(p.next, #p.segments)
+end
 
+function M:Send(chatType, target)
     if chatType == "CHANNEL" then
         local id = GetChannelName(target)
         if not id or id == 0 then
@@ -233,6 +312,29 @@ function M:Send(chatType, target)
             return
         end
         target = id
+    end
+
+    if self:Locked() then
+        NS.Say("the game is holding chat back here - post when you are out", "warn")
+        return
+    end
+
+    -- the next part of a long ad, on this click
+    local key = TargetKey(chatType, target)
+    local p = self.pending[key]
+    if p then
+        SendChatMessage(p.segments[p.next], chatType, nil, target)
+        NS.Say(("part %d of %d sent"):format(p.next, #p.segments), "good")
+        p.next = p.next + 1
+        if p.next > #p.segments then self.pending[key] = nil end
+        return
+    end
+
+    local message, missing = self:Build()
+
+    if message == "" then
+        NS.Say("nothing to send", "warn")
+        return
     end
 
     local ok, wait = self:CanSend(chatType, target)
@@ -256,25 +358,46 @@ function M:Send(chatType, target)
     self.lastSend[TargetKey(chatType, target)] = GetTime()
     self.lastAny = GetTime()
 
-    -- Stagger multi-part messages; the server drops bursts.
-    for i, segment in ipairs(segments) do
-        if i == 1 then
-            SendChatMessage(segment, chatType, nil, target)
+    if self.CLICK_ONLY[chatType] then
+        SendChatMessage(segments[1], chatType, nil, target)
+        if #segments > 1 then
+            self.pending[key] = { segments = segments, next = 2 }
+            NS.Say(("part 1 of %d sent - click again for the next"):format(#segments), "gold")
         else
-            C_Timer.After((i - 1) * 1.2, function()
-                SendChatMessage(segment, chatType, nil, target)
-            end)
+            NS.Say("sent to " .. (chatType == "CHANNEL" and ("/" .. target) or chatType:lower()), "good")
         end
+    else
+        -- not a public channel: the rest may follow on a timer (the server drops bursts)
+        for i, segment in ipairs(segments) do
+            if i == 1 then
+                SendChatMessage(segment, chatType, nil, target)
+            else
+                C_Timer.After((i - 1) * 1.2, function() SendChatMessage(segment, chatType, nil, target) end)
+            end
+        end
+        NS.Say("sent to " .. chatType:lower() .. (#segments > 1 and (" x" .. #segments) or ""), "good")
     end
-
-    NS.Say("sent to " .. (chatType == "CHANNEL" and ("/" .. target) or chatType:lower()) ..
-        (#segments > 1 and (" x" .. #segments) or ""), "good")
+    if NS.Stats and NS.Stats.Posted then NS.Stats.Posted(chatType, target) end
 end
 
 function M:SendWhisper(playerName, text)
     if not playerName or playerName == "" or not text or text == "" then return false end
     if NS.db.previewMode then
         NS.Say("preview - " .. playerName .. " not whispered", "warn")
+        return true
+    end
+    if self:Locked() then
+        -- held, not lost: sent the moment the game allows it (M:Flush)
+        self.queue[#self.queue + 1] = { name = playerName, text = text, at = GetTime() }
+        NS.Say(playerName .. " - held until the game allows chat", "gold")
+        if NS.Cards then
+            NS.Cards.Working("held", ("%d WHISPER%s WAITING"):format(#self.queue, #self.queue == 1 and "" or "S"),
+                "the game is holding chat back here - they go the moment it lets them")
+        end
+        if not self.flushing then
+            self.flushing = true
+            C_Timer.After(self.FLUSH_EVERY, function() M:Flush() end)
+        end
         return true
     end
     for i, segment in ipairs(U.SplitMessage(text, NS.CHAT_LIMIT)) do
