@@ -106,8 +106,7 @@ local function Defaults()
         responders = {},
         minimap    = { hide = false, angle = 205 },
         window     = {},
-        uiTab      = "Recruit",
-        bookOpen   = false,        -- the tab rail is rolled up until asked for
+        uiTab      = "Desk",       -- the page the window opens on (the desk is a page since 21 Oct 2026)
         filter     = "all",
         hiddenChannels = {},       -- send buttons right-clicked off the desk
         -- 21 Oct 2026, the review:
@@ -143,6 +142,8 @@ function NS:LoadDB()
         end
     end
 
+    -- the desk became the window's first page (21 Oct 2026): a 3.x save opens on it, not on Recruit
+    if (tonumber(saved.dbVersion) or 0) < 4 then saved.uiTab, saved.bookOpen = "Desk", nil end
     saved.dbVersion = NS.DB_VERSION
     _G.NebbinatorDB = saved
     self.db = saved
@@ -302,8 +303,8 @@ local function HandleSlash(msg)
 
     if cmd == "" or cmd == "show" then
         NS.UI:Toggle()
-    elseif cmd == "r" or cmd == "responders" then
-        NS.UI:Toggle()
+    elseif cmd == "r" or cmd == "responders" or cmd == "desk" then
+        NS.UI:Toggle("Desk")
     elseif cmd == "config" or cmd == "options" or cmd == "settings" then
         NS.UI:ToggleOptions()
     elseif cmd == "book" then

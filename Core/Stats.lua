@@ -37,13 +37,18 @@ function S.Posted(chatType, target)
                                 chatType = chatType, target = target })
     for i = #st.posts, S.KEEP + 1, -1 do st.posts[i] = nil end
     S.Remind(chatType, target)
+    if NS.UI and NS.UI.RefreshStats then NS.UI:RefreshStats() end
 end
 
 --- Somebody new whispered: credit the newest post inside the window.
 function S.Whispered(name, now)
     now = now or time()
     for _, p in ipairs(db().posts) do
-        if now - p.at <= S.WINDOW then p.whispers = (p.whispers or 0) + 1 return p end
+        if now - p.at <= S.WINDOW then
+            p.whispers = (p.whispers or 0) + 1
+            if NS.UI and NS.UI.RefreshStats then NS.UI:RefreshStats() end
+            return p
+        end
         if now - p.at > S.WINDOW then break end
     end
     return nil
@@ -65,7 +70,7 @@ function S.Summary()
     return out
 end
 
---- One way of the summary as lines, best first: "Trade - 8 whispers from 12 posts".
+--- One way of the summary as lines, best first: "Trade  8 / 12" (whispers / posts - the page's column says so).
 function S.Lines(byWhat)
     local rows = {}
     for key, b in pairs(S.Summary()[byWhat] or {}) do rows[#rows + 1] = { key = key, b = b } end
@@ -76,8 +81,7 @@ function S.Lines(byWhat)
     end)
     local out = {}
     for _, r in ipairs(rows) do
-        out[#out + 1] = ("%s - %d whisper%s from %d post%s"):format(r.key, r.b.whispers, r.b.whispers == 1 and "" or "s",
-            r.b.posts, r.b.posts == 1 and "" or "s")
+        out[#out + 1] = ("%s  %d / %d"):format(r.key, r.b.whispers, r.b.posts)
     end
     return out
 end

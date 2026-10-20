@@ -62,11 +62,16 @@ H.ok(NS.db.autoReply.busyText ~= nil and NS.db.autoReply.classAware == true and 
 H.eq(NS.db.windows, nil, "old two-window positions dropped")
 H.eq(#NS.db.quickReplies, 4, "four quick replies")
 
-H.section("the desk, and four pages in the book")
+H.section("one window, seven pages, the desk first")
 local UI = NS.UI
 H.ok(UI.frame ~= nil, "window built at login")
 H.eq(UI.frame:IsShown(), false, "starts hidden")
-H.eq(#UI.PAGES, 4, "four pages in the book")
+H.eq(#UI.PAGES, 7, "seven pages: desk, team, stats, recruit, message, replies, about")
+H.eq(UI.PAGES[1], "Desk", "the desk is the first")
+H.eq(NS.db.uiTab, "Desk", "and a 3.x save opens on it (it opened on Recruit)")
+H.eq(UI.frame:GetWidth(), UI.W, "the window is its width")
+H.eq(UI.frame:GetHeight(), UI.H, "and its height")
+H.ok(math.abs(UI.W / UI.H - 1.43) < 0.005, "the house shape: 1.43 to 1", UI.W / UI.H)
 for _, name in ipairs(UI.PAGES) do
     H.ok(UI.pages[name] ~= nil, "page exists: " .. name)
 end
@@ -181,8 +186,8 @@ do
     -- Innervate shipped a page that ran straight off the frame. This is the
     -- arithmetic that would have caught it: everything anchored from the top
     -- of a page must end above the page's own bottom edge.
-    local pageH = UI.H - UI.HEADER - 18 - 16
     for _, name in ipairs(UI.PAGES) do
+        local pageH = UI.EDGE_TO_EDGE[name] and (UI.H - UI.HEADER - 2) or (UI.H - UI.HEADER - 18 - 16)
         local page = UI.pages[name]
         local worst, worstBottom = nil, 0
         for _, fr in ipairs(H.frames) do
@@ -202,6 +207,7 @@ do
 end
 
 H.section("send bar")
+UI:ShowTab("Desk")
 local bar = UI.send
 H.ok(#bar.buttons >= 8, "a button per channel plus yell/say/guild", #bar.buttons)
 local labels = {}
@@ -402,19 +408,19 @@ H.ok(UI.con:Width() <= BUDGET, "prompt fits the header budget (idle)", UI.con:Wi
 
 -- nothing but the prompt and the button strip lives in that bar
 H.eq(UI.closeBtn.slot, -3, "close sits at its computed slot")
-H.eq(UI.bookBtn.slot, -17, "the book button sits at its own")
-H.eq(UI.optBtn.slot, -31, "and options at its own")
-for _, b in ipairs({ UI.closeBtn, UI.bookBtn, UI.optBtn }) do
+H.eq(UI.optBtn.slot, -17, "and options at its own (the book's button went with the book)")
+H.eq(UI.bookBtn, nil, "no book button: every page is a tab")
+for _, b in ipairs({ UI.closeBtn, UI.optBtn }) do
     H.eq(b:GetWidth(), 12, "12 px boxes, all of them")
 end
-H.eq(UI.STRIP, 31 + UI.optBtn:GetWidth(), "the strip is exactly the far button plus its offset")
+H.eq(UI.STRIP, 17 + UI.optBtn:GetWidth(), "the strip is exactly the far button plus its offset")
 H.ok(UI.badge == nil and UI.preview == nil, "no badge, no preview pill - both are slots now")
 local inHeader = 0
 for _, fr in ipairs(H.frames) do if fr._parent == UI.head then inHeader = inHeader + 1 end end
 -- This count is the guard that catches the NEXT thing somebody adds to a 16 px
 -- bar without predicting what it is. It went 2 -> 3 on purpose when Settings
--- stopped being a tab and became the options window.
-H.eq(inHeader, 3, "three frames in the header: close, the book, options")
+-- stopped being a tab and became the options window, and 3 -> 2 when the book went (21 Oct 2026).
+H.eq(inHeader, 2, "two frames in the header: close, options")
 
 -- slots: state that lasts, cleared the moment it ends
 NS.db.responders = {}
@@ -605,82 +611,69 @@ lib:SetEnabled(true)
 -- the desk: as tall as the list and no taller
 --------------------------------------------------------------------
 
-H.section("the window grows as whispers land and shrinks as they are dealt with")
-UI:ToggleBook(false)
+H.section("the window keeps its shape; the desk scrolls")
+UI:ShowTab("Desk")
 UI.serving = nil
 NS.db.responders = {}
 UI.filter = "all"
 UI:LayoutDesk()
-
-local empty = UI.frame:GetHeight()
-H.eq(UI.frame:GetWidth(), UI.DESK_W, "rolled up, the window is desk width")
-
-local heights = { [0] = empty }
+local W0, H0 = UI.frame:GetWidth(), UI.frame:GetHeight()
+H.ok(W0 == UI.W and H0 == UI.H, "an empty desk: the window's own size")
+H.ok(not UI.listHost:IsShown(), "and no list - the count line says why")
+H.ok(UI.countText:GetText():find("Nobody yet", 1, true), "Nobody yet - post the ad", UI.countText:GetText())
 for i = 1, 4 do
     NS.db.responders["P" .. i] = { name = "P" .. i, status = "new",
         timestamp = os.time() - i, messages = { { text = "hi", at = os.time() } } }
     UI:LayoutDesk()
-    heights[i] = UI.frame:GetHeight()
-    H.ok(heights[i] > heights[i - 1], i .. " waiting is taller than " .. (i - 1),
-         heights[i - 1] .. " -> " .. heights[i])
+    H.ok(UI.frame:GetWidth() == W0 and UI.frame:GetHeight() == H0, i .. " waiting: the same window")
 end
-H.eq(heights[1] - heights[0], UI.ROW_H, "each one costs exactly one row")
+H.ok(UI.listHost:IsShown(), "and a list once somebody waits")
+H.ok(UI.MAX_ROWS >= 20, "the page holds twenty rows and more before it scrolls", UI.MAX_ROWS)
+H.ok(UI.deskUsed <= UI.DESK_H(), "the desk's parts fit its page", UI.deskUsed .. " of " .. UI.DESK_H())
+local rowsIdle = UI.MAX_ROWS
 
--- and back down again
-for i = 4, 1, -1 do
-    NS.db.responders["P" .. i] = nil
-    UI:LayoutDesk()
-    H.eq(UI.frame:GetHeight(), heights[i - 1], "removing one gives the height back")
-end
-H.eq(UI.frame:GetHeight(), empty, "empty desk is back to its smallest")
-
--- a long list stops growing and scrolls instead
-for i = 1, 40 do
+for i = 1, 60 do
     NS.db.responders["Q" .. i] = { name = "Q" .. i, status = "new",
         timestamp = os.time() - i, messages = { { text = "hi", at = os.time() } } }
 end
 UI:LayoutDesk()
-local tall = UI.frame:GetHeight()
-H.ok(tall <= empty + UI.MAX_ROWS * UI.ROW_H + 2, "40 waiting is capped at MAX_ROWS, not 40 rows", tall)
-H.ok(UI.listScroll.track:IsShown(), "and the list scrolls instead")
-H.ok(UI.rows[1]:IsShown(), "the rows are still there to scroll through")
+H.ok(UI.frame:GetHeight() == H0, "sixty waiting: still the same window")
+H.ok(UI.listScroll.track:IsShown(), "the list scrolls instead")
+H.ok(UI.rows[1]:IsShown(), "the rows are there to scroll through")
 
--- serving one opens the block and costs its height, exactly once
-local before = UI.frame:GetHeight()
+-- serving one opens the block inside the page: the list gives up the room
 UI:Serve("Q1")
-H.eq(UI.frame:GetHeight(), before + UI.SERVED_H, "serving opens the block")
+H.eq(UI.frame:GetHeight(), H0, "serving opens the block, not the window")
+H.ok(UI.MAX_ROWS < rowsIdle and UI.served:IsShown(), "the list gives the block its room", UI.MAX_ROWS .. " of " .. rowsIdle)
+H.ok(UI.deskUsed <= UI.DESK_H(), "and it all still fits the page", UI.deskUsed .. " of " .. UI.DESK_H())
+local rowsServed = UI.MAX_ROWS
 UI:Serve("Q2")
-H.eq(UI.frame:GetHeight(), before + UI.SERVED_H, "serving somebody else does not stack another")
+H.eq(UI.MAX_ROWS, rowsServed, "serving somebody else does not stack another")
 UI:Serve(nil)
-H.eq(UI.frame:GetHeight(), before, "putting them down closes it again")
+H.eq(UI.MAX_ROWS, rowsIdle, "putting them down gives the rows back")
 
 -- a served responder who gets removed stops being served
 UI:Serve("Q1")
 NS.Responders:Remove("Q1")
-H.ok(UI:ServedName() == nil, "removing the served one un-serves them")
-H.eq(UI.frame:GetHeight(), UI.frame:GetHeight(), "and the block goes with them")
+H.ok(UI:ServedName() == nil and not UI.served:IsShown(), "removing the served one un-serves them, and the block goes")
 NS.db.responders = {}
 UI:LayoutDesk()
 
-H.section("the book rolls up and down")
-H.ok(not UI.book:IsShown(), "rolled up by default")
-local rolled = UI.frame:GetHeight()
-UI:ToggleBook(true)
-H.ok(UI.book:IsShown(), "the button rolls it out")
-H.eq(UI.frame:GetWidth(), UI.BOOK_W, "and the window widens for the rail")
-H.eq(UI.frame:GetHeight(), rolled + UI.BOOK_H, "and grows by exactly the book")
-H.ok(UI.bookBtn.marked, "the header button lights while it is out")
+H.section("the tabs: the desk and the rest")
+UI:ShowTab("Recruit")
+H.ok(UI.pages.Recruit:IsShown() and not UI.pages.Desk:IsShown(), "a page's tab shows that page")
 UI:ToggleBook(false)
-H.eq(UI.frame:GetWidth(), UI.DESK_W, "rolling it up gives the width back")
-H.eq(UI.frame:GetHeight(), rolled, "and the height")
-H.ok(not UI.bookBtn.marked, "and the light goes out")
--- the desk keeps working while the book is out
-UI:ToggleBook(true)
-NS.db.responders.Zed = { name = "Zed", status = "new", timestamp = os.time(), messages = {} }
-UI:LayoutDesk()
-H.eq(UI.frame:GetHeight(), rolled + UI.ROW_H + UI.BOOK_H, "a whisper still grows the desk under an open book")
-NS.db.responders = {}
+H.eq(UI:ShownTab(), "Desk", "/bisn book (the minimap's right click) steps back to the desk")
+UI:ToggleBook()
+H.eq(UI:ShownTab(), "Recruit", "and out again to the page you were on")
+UI:ShowTab("Replies")
 UI:ToggleBook(false)
+UI:ToggleBook(true)
+H.eq(UI:ShownTab(), "Replies", "whichever that was")
+H.eq(UI.frame:GetHeight(), H0, "no tab changes the window's size")
+UI:Open("Responders")
+H.eq(UI:ShownTab(), "Desk", "Responders (the desk's old name) opens the desk")
+UI:ShowTab("Desk")
 UI:LayoutDesk()
 
 H.section("send buttons: the clock never sits on the label")
@@ -753,18 +746,15 @@ end
 H.eq(UI.frame:GetTop(), topBefore, "pinning a channel does not move the top edge")
 H.eq(UI.frame:GetLeft(), leftBefore, "and it does not move sideways either")
 
-local heightPinned = UI.frame:GetHeight()
 for _, b in ipairs(UI.send.buttons) do
     if b.label == "/2 Trade" then b:Click("RightButton") break end
 end
 H.eq(UI.frame:GetTop(), topBefore, "un-pinning does not move it back down either")
 
-UI:ToggleBook(true)
-H.eq(UI.frame:GetTop(), topBefore, "rolling the book out grows downward, not off the top")
-H.ok(UI.frame:GetHeight() > heightPinned, "and it really did get taller",
-     UI.frame:GetHeight() .. " vs " .. heightPinned)
-UI:ToggleBook(false)
-H.eq(UI.frame:GetTop(), topBefore, "rolling it back up leaves the top alone")
+UI:ShowTab("Recruit")
+H.eq(UI.frame:GetTop(), topBefore, "another tab leaves the top alone")
+UI:ShowTab("Desk")
+H.eq(UI.frame:GetTop(), topBefore, "and back")
 
 NS.db.responders["Topcheck"] = { name = "Topcheck", status = "new",
     timestamp = os.time(), messages = { { text = "any room?", at = os.time() } } }
@@ -1622,7 +1612,7 @@ end)()
     H.eq(p.whispers, 1, "one after the window is nobody's")
     table.insert(NS.db.stats.posts, { at = p.at - 3600, where = "General", tpl = "Short", whispers = 0 })
     local lines = St.Lines("where")
-    H.ok(lines[1] == "Trade - 1 whisper from 1 post" and lines[2] == "General - 0 whispers from 1 post", "best channel first", lines[1])
+    H.ok(lines[1] == "Trade  1 / 1" and lines[2] == "General  0 / 1", "best channel first: whispers / posts", lines[1])
     NS.db.remind = 15
     H.ok(#H.timers >= 1 and H.timers[#H.timers].delay == 15 * 60, "the reminder waits 15 min")
     local remind = H.timers[#H.timers].fn
@@ -1746,6 +1736,42 @@ end)()
     H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
     R.rosterDirty = true
     NS.db.needs.shaman.resto = 0
+end)()
+
+;(function()
+    local UI, T = NS.UI, NS.Team
+    local now = os.time()
+    H.section("the Team page")
+    NS.db.team = { Newest = { name = "Newest", status = "contacted", by = "Grunt", at = now - 60, note = "secret note" },
+                   Older = { name = "Older", status = "trial", by = "Kumlust", at = now - 7200 } }
+    UI:Open("Team")
+    H.ok(UI.teamRows[1].name._text:find("Newest", 1, true) and UI.teamRows[2].name._text:find("Older", 1, true), "newest first")
+    H.ok(UI.teamRows[1].by._text:find("by Grunt", 1, true), "who is talking to them", UI.teamRows[1].by._text)
+    H.ok(not UI.teamRows[1].by._text:find("secret", 1, true), "a member's page shows no note")
+    H.eq(UI.teamSend.enabled, false, "and a member's Send to the guild is greyed")
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 1 } }
+    NS.Responders.rosterDirty = true
+    UI:Refresh()
+    H.ok(UI.teamRows[1].by._text:find("secret note", 1, true), "an officer's shows it")
+    H.eq(UI.teamSend.enabled, true, "and an officer can send")
+    H.fitsIn(UI.frame, "the Team page, full")
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+    NS.Responders.rosterDirty = true
+    NS.db.team = {}
+
+    H.section("the Stats page")
+    NS.db.stats = { posts = { { at = now, where = "GuildRecruitment", tpl = "Standard", whispers = 3 },
+                              { at = now - 600, where = "LookingForGroup", tpl = "Roles only", whispers = 0 } } }
+    UI:ShowTab("Stats")
+    H.ok(UI.statsTotal._text:find("2 posts brought 3 whispers", 1, true), "the total", UI.statsTotal._text)
+    H.eq(UI.statsCols[1].lines[1]._text, "GuildRecruitment  3 / 1", "the best channel on top")
+    H.fitsIn(UI.frame, "the Stats page, the longest channel names")
+    UI:Set("remind", 30)
+    H.eq(NS.db.remind, 30, "the reminder's setting round-trips")
+    NS.db.remind = 15
+    NS.db.stats = { posts = {} }
+    UI:ShowTab("Desk")
+    UI:Hide()
 end)()
 
 H.report()

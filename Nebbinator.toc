@@ -32,5 +32,7 @@ UI\Options.lua
 UI\Pages\Recruit.lua
 UI\Pages\Message.lua
 UI\Pages\Replies.lua
+UI\Pages\Team.lua
+UI\Pages\Stats.lua
 UI\Pages\About.lua
 UI\Minimap.lua
