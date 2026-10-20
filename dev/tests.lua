@@ -792,13 +792,18 @@ H.section("the options window")
 local O = BiSTheme.OPTIONS
 local opt = UI:BuildOptions()
 
-local SECTIONS = { "nebbinator", "posting", "answering", "finding people" }
+local SECTIONS = { "nebbinator", "posting", "answering", "finding people", "the guild" }
 local OPTIONS = {
     "minimap button", "BiS channel (/biscomm)", "reset window position",
-    "preview - never sends", "cooldown per channel",
-    "auto-reply", "alert sound", "only the first one", "which sound",
-    "watch for \"LF guild\"",
+    "preview - never sends", "cooldown per channel", "remind me to post",
+    "auto-reply", "say the class we need", "launch day: answer all", "alert sound", "only the first one", "which sound",
+    "watch for \"LF guild\"", "party scout",
+    "officers: ranks 0 to",
 }
+-- 4.0 (Arn's screenshot, 21 Oct: the help strip said "no notes on this one yet"): every row says what it does
+for _, s in ipairs(UI:OptionSections()) do
+    for _, o in ipairs(s.options) do H.ok(type(o.help) == "string" and o.help ~= "", "a help line: " .. o.label) end
+end
 -- Counted from a written-down list, NOT from UI:OptionSections() - deriving the
 -- expectation from the thing under test means deleting a section changes both
 -- sides and the assert cannot fail.
@@ -1760,6 +1765,33 @@ end)()
     H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
     NS.Responders.rosterDirty = true
     NS.db.team = {}
+
+    -- ARN'S GREYED BUTTON (21 Oct 2026): on Forever UnitName is "Arn", the roster says "Arn Surname" - the GM
+    -- was nobody, so Send to the guild never lit. Whole names everywhere now.
+    H.section("whole names: an officer with a surname")
+    H.raid = { { name = "Kumlust Wildhammer" } }
+    H.guild = { { name = "Kumlust Wildhammer-Dreamscythe", rank = 0 } }
+    NS.Responders.rosterDirty = true
+    H.eq(UnitName("player"), "Kumlust", "(the stand-in, as Forever: UnitName is the first name)")
+    H.eq(T.Me(), "Kumlust Wildhammer", "I am my whole name")
+    H.ok(T.IsOfficer(), "and the guild master with a surname is an officer")
+    UI:Open("Team")
+    H.eq(UI.teamSend.enabled, true, "Send to the guild lights")
+    H.eq(T.Rank("Kumlust"), 0, "a first name alone finds the one roster name it begins")
+    H.guild[2] = { name = "Kumlust Otherone-Dreamscythe", rank = 4 }
+    NS.Responders.rosterDirty = true
+    H.eq(T.Rank("Kumlust"), nil, "two of them: not guessed")
+    -- the scout looks people up by their whole name too
+    NS.db.needs.shaman.resto, NS.db.scout, NS.db.scoutSeen = 2, true, {}
+    H.inParty = true
+    H.raid = { { name = "Kumlust Wildhammer" }, { name = "Chain Healz", class = "SHAMAN" } }
+    local look = NS.Scout.Look("party1")
+    H.eq(look and look.name, "Chain Healz", "the scout's card names them whole (to whisper and invite them)")
+    H.inParty, H.raid = false, { { name = "Kumlust" } }
+    NS.db.needs.shaman.resto = 0
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+    NS.Responders.rosterDirty = true
+    NS.Responders.me = nil
 
     H.section("the Stats page")
     NS.db.stats = { posts = { { at = now, where = "GuildRecruitment", tpl = "Standard", whispers = 3 },

@@ -171,7 +171,9 @@ function R:OnChannelMessage(text, sender, _, _, _, _, _, _, channelName)
     if not NS.db.leadFinder then return end
     if self:Hid("CHAT_MSG_CHANNEL", text, sender, channelName) then return end
     sender = U.StripRealm(sender or "")
-    if sender == "" or sender == UnitName("player") then return end
+    -- my own whole name, asked once a session (a city's channels are hundreds of lines an hour)
+    if not R.me then R.me = U.WholeName("player") end
+    if sender == "" or sender == R.me then return end
     if NS.db.responders[sender] then return end
 
     local lower = (text or ""):lower()

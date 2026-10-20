@@ -356,7 +356,14 @@ function H.Member(unit)
     if p then return (H.inParty and not H.inRaid) and tonumber(p) <= 4 and H.raid[tonumber(p) + 1] or nil end
     return nil
 end
+-- FOREVER'S NAMES (measured 18 Oct 2026): UnitName is the FIRST name ("Chain"), GetUnitName(unit, false) the
+-- whole one ("Chain Healz"). An H.raid entry's `name` is the whole name; the player's is H.raid[1]'s.
 _G.UnitName = function(unit)
+    local m = H.Member(unit or "player")
+    local whole = m and m.name or "Kumlust"
+    return (whole:match("^(%S+)") or whole)
+end
+_G.GetUnitName = function(unit)
     local m = H.Member(unit or "player")
     return m and m.name or "Kumlust"
 end

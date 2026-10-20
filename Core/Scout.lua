@@ -45,9 +45,8 @@ end
 function S.Look(unit)
     if not (UnitExists and UnitExists(unit)) or (UnitIsUnit and UnitIsUnit(unit, "player")) then return nil, "nobody" end
     if UnitIsPlayer and not UnitIsPlayer(unit) then return nil, "not a player" end
-    local name = plain(UnitName(unit))
+    local name = U.WholeName(unit)               -- the whole "Name Surname": the desk, roster and list use it
     if type(name) ~= "string" or name == "" then return nil, "no name" end
-    name = U.StripRealm(name)
     if (UnitIsInMyGuild and plain(UnitIsInMyGuild(unit))) or NS.Responders:IsGuildMember(name) then return nil, "ours already" end
     local seen = NS.db.scoutSeen[name]
     if seen and time() - seen < S.AGAIN then return nil, "asked this week" end

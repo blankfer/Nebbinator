@@ -36,7 +36,7 @@ function UI:BuildStats(page)
     y = self:Caption(page, y - 8, "the reminder")
     y = self:Seg(page, y, "remind", "Remind me to post again", { { 0, "Never" }, { 10, "10 min" }, { 15, "15 min" }, { 30, "30 min" } },
         function() return tonumber(NS.db.remind) or 0 end,
-        function(v) NS.db.remind = v end)
+        function(v) NS.SetRemind(v) end)
     y = self:Note(page, y, "In a city or an inn only. The card's Post button sends the same ad again - a click, which the game needs for a channel.")
     return page
 end

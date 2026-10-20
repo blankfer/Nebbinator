@@ -232,6 +232,29 @@ function NS.SetDiscord(link)
     NS.UI:Refresh()
 end
 
+function NS.ToggleClassAware()
+    NS.db.autoReply.classAware = not NS.db.autoReply.classAware
+    NS.UI:Refresh()
+end
+
+function NS.ToggleBusy()
+    NS.db.autoReply.busy = not NS.db.autoReply.busy
+    NS.Say("launch-day mode " .. (NS.db.autoReply.busy and "on - everyone gets the busy reply" or "off"),
+        NS.db.autoReply.busy and "gold" or "ink2")
+    NS.UI:Refresh()
+end
+
+function NS.SetRemind(mins)
+    NS.db.remind = math.max(0, math.min(60, tonumber(mins) or 0))
+    NS.UI:Refresh()
+end
+
+function NS.SetOfficerRank(n)
+    NS.db.officerRank = math.max(0, math.min(9, tonumber(n) or 1))
+    NS.Responders.rosterDirty = true
+    NS.UI:Refresh()
+end
+
 function NS.ToggleScout()
     NS.db.scout = not NS.db.scout
     NS.Say("party scout " .. (NS.db.scout and "on" or "off"), NS.db.scout and "good" or "warn")

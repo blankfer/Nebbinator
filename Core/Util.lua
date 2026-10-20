@@ -248,6 +248,20 @@ function U.StripRealm(name)
     return (name:gsub("%-.*$", ""))
 end
 
+--- A unit's WHOLE name, realm off: "Chain Healz". On Forever UnitName is the first name only ("Chain") while
+--- whispers, the guild roster and the shared BiS channel all use the whole one - Arn's Send to the guild sat
+--- greyed (21 Oct 2026) because "Arn" was looked up in a roster that says "Arn Surname". GetUnitName(unit,
+--- false) carries the surname; UnitName is the fallback where it is missing or hidden.
+function U.WholeName(unit)
+    if GetUnitName then
+        local ok, n = pcall(GetUnitName, unit, false)
+        if ok and type(n) == "string" and n ~= "" and not U.Hidden(n) then return U.StripRealm(n) end
+    end
+    local n = UnitName and UnitName(unit)
+    if type(n) ~= "string" or U.Hidden(n) then return nil end
+    return U.StripRealm(n)
+end
+
 -- Splits a message so every piece fits in WoW's 255-character chat limit.
 -- Breaks on separators / spaces where possible instead of mid-word.
 function U.SplitMessage(text, limit)

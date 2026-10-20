@@ -36,21 +36,34 @@ local function db() return NS.db end
 --------------------------------------------------------------------
 
 --- The rank index (0 = guild master) of a guildmate, or nil when they are not in the guild roster.
+--- A FIRST NAME ALONE ("Arn", from an older client's message) finds the one roster name it begins - the
+--- online one when several do (BiS Guild's X.Rank, the same rule); a whole name must match whole.
 function T.Rank(name)
     local R = NS.Responders
     if R.rosterDirty or not R.guildRanks then
         R.rosterDirty = nil
         R:RefreshGuildRoster()
     end
-    return R.guildRanks and R.guildRanks[U.StripRealm(name or ""):lower()]
+    local key = U.StripRealm(name or ""):lower()
+    local ranks = R.guildRanks or {}
+    if ranks[key] ~= nil then return ranks[key] end
+    if key == "" or key:find(" ", 1, true) then return nil end
+    local found
+    for whole, rank in pairs(ranks) do
+        if whole:match("^(%S+)") == key then
+            if found ~= nil then return nil end             -- two of them: not guessed
+            found = rank
+        end
+    end
+    return found
 end
 
 function T.IsOfficer(name)
-    local rank = T.Rank(name or (UnitName and UnitName("player")))
+    local rank = T.Rank(name or T.Me())
     return rank ~= nil and rank <= (tonumber(db().officerRank) or 1)
 end
 
-function T.Me() return UnitName and UnitName("player") or "?" end
+function T.Me() return U.WholeName("player") or "?" end
 
 --------------------------------------------------------------------
 -- the guild's list

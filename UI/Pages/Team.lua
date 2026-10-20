@@ -44,6 +44,10 @@ function UI:BuildTeam(page)
         self.teamRows[i] = r
         y = y - 15
     end
+    -- the empty list's line: the whole width (the first row's name column is 150 px and wrapped it in three)
+    self.teamEmpty = K.fs(page, "", 10, "dim")
+    self.teamEmpty:SetPoint("TOPLEFT", self.teamRows[1].name, "TOPLEFT", 0, 0)
+    self.teamEmpty:SetWidth(UI.colW(page) - 4)
     self.teamMore = K.fs(page, "", 10, "dim")
     self.teamMore:SetPoint("TOPLEFT", page, "TOPLEFT", 2, y - 2)
     return page
@@ -81,10 +85,11 @@ function UI:RefreshTeam()
             if officer and row.note and row.note ~= "" then bits[#bits + 1] = '"' .. row.note .. '"' end
             r.by:SetText(table.concat(bits, "   "))
         else
-            r.name:SetText(i == 1 and NS.T.text("dim", "nobody yet - recruits anyone in the guild talks to show up here") or "")
+            r.name:SetText("")
             r.status:SetText("")
             r.by:SetText("")
         end
     end
+    self.teamEmpty:SetText(#list == 0 and "nobody yet - every recruit somebody in the guild talks to shows up here" or "")
     self.teamMore:SetText(#list > #self.teamRows and ("and " .. (#list - #self.teamRows) .. " more") or "")
 end
