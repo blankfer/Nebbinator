@@ -571,7 +571,7 @@ UI:ShowTab("Responders")
 H.section("LibBiSComm is embedded, booted, and never gated by a feature")
 local lib = _G.LibBiSComm
 H.ok(lib ~= nil, "the lib loaded from Libs/")
-H.eq(lib and lib.MINOR, 15, "minor 15, the current one (the ride clock)")
+H.eq(lib and lib.MINOR, 16, "minor 16, the current one (FojjiCore's windows)")
 H.ok(lib and lib._booted, "booted from Core/Init, not lazily")
 -- the stub answers GetAddOnMetadata with "test": if this ever reads a literal
 -- like "2.0.1" the version has been hardcoded again and drifted from the TOC
