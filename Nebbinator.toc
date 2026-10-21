@@ -4,7 +4,7 @@
 ## IconTexture: Interface\TargetingFrame\UI-RaidTargetingIcon_1
 ## Notes: Guild recruitment for the whole guild: the ad, the desk, the guild's shared list of recruits and the party scout.
 ## Author: Arn
-## Version: 4.0.1
+## Version: 4.0.2
 ## OptionalDeps: BiSTheme
 ## SavedVariables: NebbinatorDB
 ## DefaultState: enabled
