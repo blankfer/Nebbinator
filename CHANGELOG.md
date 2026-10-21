@@ -1,5 +1,9 @@
 # Nebbinator
 
+## 4.0.1
+
+- **Carries the shared ride clock** (the BiS lib, version 15): ride a zeppelin or a boat with any BiS addon on and its timetable goes to your guild and group - for BiS Tools' ride card and Power Word: Shell's ZEPPELIN.EXE and HARBOR.EXE.
+
 ## 4.0.0
 
 Rebuilt for WoW Forever. TBC is no longer supported.
