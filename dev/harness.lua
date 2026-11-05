@@ -358,11 +358,17 @@ function H.Member(unit)
 end
 -- FOREVER'S NAMES (measured 18 Oct 2026): UnitName is the FIRST name ("Chain"), GetUnitName(unit, false) the
 -- whole one ("Chain Healz"). An H.raid entry's `name` is the whole name; the player's is H.raid[1]'s.
+-- KINDER THAN THE CLIENT, KNOWN: the default stand-in "Kumlust" has no surname, so for him the two answers
+-- AGREE and a whisper to UnitName("player") passes. Forever has no surname-less players. Any test of a path
+-- that names ME (a whisper to myself, my row's `by`) sets H.raid[1] to a whole name first - the test reply
+-- buttons whispered the first name for weeks with the suite green (4.0.4). 31 lines of the suite lean on
+-- the plain default; flipping it is its own change.
 _G.UnitName = function(unit)
     local m = H.Member(unit or "player")
     local whole = m and m.name or "Kumlust"
     return (whole:match("^(%S+)") or whole)
 end
+-- the client takes (unit, showServerName); the realm never shows here (H.raid names carry none)
 _G.GetUnitName = function(unit)
     local m = H.Member(unit or "player")
     return m and m.name or "Kumlust"
@@ -459,7 +465,7 @@ _G.C_FriendList = {
 --------------------------------------------------------------------
 
 H.wire = {}            -- every addon message this client put on the wire
-H.raid = { { name = "Kumlust" } }
+H.raid = { { name = "Kumlust" } }   -- no surname: kinder than Forever, see UnitName above
 H.inRaid = false
 
 _G.C_ChatInfo = {

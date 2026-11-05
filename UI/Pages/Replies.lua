@@ -5,6 +5,17 @@ local ADDON, NS = ...
 local K  = NS.Kit
 local UI = NS.UI
 
+-- A test whisper to MYSELF goes to my whole name: on Forever UnitName("player") is the first name alone,
+-- and a whisper to that reaches nobody and says nothing (4.0.4). WholeName answers nil for a hidden one.
+local function WhisperMe(text)
+    local me = NS.Util.WholeName("player")
+    if not me then
+        NS.Say("the game is hiding your name right now - try the test again in a moment", "warn")
+        return
+    end
+    NS.Message:SendWhisper(me, text)
+end
+
 function UI:BuildReplies(page)
     local left, right = self:Columns(page, 0.5)
 
@@ -31,7 +42,7 @@ function UI:BuildReplies(page)
         counter:SetJustifyH("RIGHT")
 
         local testBtn = K.Button(left, "Test", 56, 20, function()
-            NS.Message:SendWhisper(UnitName("player"), NS.Message:Render(NS.db.quickReplies[i].text))
+            WhisperMe(NS.Message:Render(NS.db.quickReplies[i].text))
         end)
         testBtn:SetPoint("TOPRIGHT", left, "TOPRIGHT", -2, slotTop)
         testBtn:SetTip("Test", "Whispers this reply to yourself.")
@@ -42,7 +53,7 @@ function UI:BuildReplies(page)
         end)
         area:SetPoint("TOPLEFT", left, "TOPLEFT", 2, slotTop - 24)
 
-        self.quickWidgets[i] = { label = labelWell, area = area, counter = counter }
+        self.quickWidgets[i] = { label = labelWell, area = area, counter = counter, test = testBtn }
 
         self:Register("quick" .. i .. "Label",
             function() return NS.db.quickReplies[i].label or "" end,
@@ -116,7 +127,7 @@ function UI:BuildReplies(page)
         function(v) NS.db.autoReply.skipGuildies = v and true or false end)
 
     self:Btn(right, ry, "testReply", "Send the reply to myself", nil, function()
-        NS.Message:SendWhisper(UnitName("player"), NS.Message:Render(NS.db.autoReply.text))
+        WhisperMe(NS.Message:Render(NS.db.autoReply.text))
     end, nil, 180)
 
     return page

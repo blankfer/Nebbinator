@@ -1793,6 +1793,35 @@ end)()
     NS.Responders.rosterDirty = true
     NS.Responders.me = nil
 
+    -- THE TEST BUTTONS WHISPERED NOBODY (4.0.4): Replies' Test and "Send the reply to myself" sent to
+    -- UnitName("player") - on Forever the first name, which reaches nobody and says nothing. The default
+    -- stand-in has no surname (kinder than the client), so this section gives him one.
+    H.section("whole names: the test replies reach me")
+    H.raid = { { name = "Kumlust Wildhammer" } }
+    NS.db.previewMode = false
+    UI:ShowTab("Replies")
+    NS.db.quickReplies[1].text = "quick one"
+    local before = #H.sent
+    UI.quickWidgets[1].test:Click()
+    local w = H.sent[before + 1]
+    H.eq(w and w.chatType, "WHISPER", "a quick reply's Test whispers")
+    H.eq(w and w.target, "Kumlust Wildhammer", "to my whole name, not the first name alone")
+    NS.db.autoReply.text = "auto one"
+    before = #H.sent
+    H.ok(UI:Run("testReply"), "Send the reply to myself is a button")
+    w = H.sent[before + 1]
+    H.eq(w and w.target, "Kumlust Wildhammer", "the auto-reply's test goes to my whole name too")
+    -- a name the game hides (a secret) is not whispered, and nothing throws
+    local hidden = setmetatable({}, { __concat = function() error("attempt to concatenate a secret value", 2) end })
+    local keepIs, keepUN, keepGUN = _G.issecretvalue, _G.UnitName, _G.GetUnitName
+    _G.issecretvalue = function(v) return v == hidden end
+    _G.UnitName, _G.GetUnitName = function() return hidden end, function() return hidden end
+    before = #H.sent
+    H.ok(pcall(UI.Run, UI, "testReply"), "a hidden name does not throw")
+    H.eq(#H.sent, before, "and nothing is whispered to it")
+    _G.issecretvalue, _G.UnitName, _G.GetUnitName = keepIs, keepUN, keepGUN
+    H.raid = { { name = "Kumlust" } }
+
     H.section("the Stats page")
     NS.db.stats = { posts = { { at = now, where = "GuildRecruitment", tpl = "Standard", whispers = 3 },
                               { at = now - 600, where = "LookingForGroup", tpl = "Roles only", whispers = 0 } } }

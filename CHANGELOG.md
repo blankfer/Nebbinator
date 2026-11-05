@@ -1,5 +1,9 @@
 # Nebbinator
 
+## 4.0.4
+
+- **The test reply buttons reach you.** On Replies, a quick reply's **Test** and **Send the reply to myself** whispered your first name only, and on Forever a whisper needs the whole "Name Surname" - so the test went nowhere, without a word. They whisper your whole name now.
+
 ## 4.0.3
 
 - **The Deeprun Tram's timetable, for the whole guild.** With the shared BiS lib's new version, riding the Deeprun Tram with any BiS addon times it for your guild, the way the zeppelins and boats already are - BiS Tools' ride card and BiS Shell's TRAM-TRAK read it.
