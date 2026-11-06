@@ -69,11 +69,42 @@ local function Share(entry) if NS.Team and NS.Team.Changed then NS.Team.Changed(
 R.Share = Share
 
 function R:IsGuildMember(name)
-    if self.rosterDirty then
+    if type(name) ~= "string" or name == "" then return false end
+    -- dirty, or never read (a fence swap drops guildRanks: the last guild's roster is not this one's)
+    if self.rosterDirty or not self.guildRanks then
         self.rosterDirty = nil
         self:RefreshGuildRoster()
     end
-    return self.guildRoster[name:lower()] == true
+    return self.guildRoster[U.StripRealm(name):lower()] == true
+end
+
+--- GUILDMATES ARE NOT RECRUITS (Arn, 5 Nov 2026: a member and an officer on BiS Guild's RECRUITS tab as
+--- "new"). A row with status "new" about somebody in the guild roster - on the desk or on the guild's list -
+--- goes. Any other status stays: somebody worked that row. Called where a list is read for showing (the
+--- desk's list and count, the Team page, the API), NEVER on GUILD_ROSTER_UPDATE: a walk of the two lists in
+--- Lua, and the roster itself only when it changed (read when asked, not when pinged). Answers how many went.
+function R:SweepGuildmates()
+    if not (NS.db and type(NS.db.responders) == "table") then return 0 end
+    if not (NS.Fence and NS.Fence.Ready()) then return 0 end     -- whose book and whose roster? not known yet
+    local gone = 0
+    local desk = NS.db.responders
+    for key, e in pairs(desk) do
+        if type(e) == "table" and e.status == "new" and self:IsGuildMember(e.name or key) then
+            desk[key] = nil
+            gone = gone + 1
+        end
+    end
+    local T = NS.Team
+    if T and T.List then
+        local L = T.List()
+        for key, row in pairs(L) do
+            if type(row) == "table" and row.status == "new" and self:IsGuildMember(row.name or key) then
+                L[key] = nil
+                gone = gone + 1
+            end
+        end
+    end
+    return gone
 end
 
 --------------------------------------------------------------------
@@ -108,6 +139,10 @@ function R:OnWhisper(text, sender, _, _, _, _, _, _, _, _, _, guid)
     local db = NS.db.responders
     local entry = db[sender]
     local isNew = false
+
+    -- A GUILDMATE IS NOT A RECRUIT (5 Nov 2026): no row, no share, no line, no sound, no callback. Somebody
+    -- already on the desk (a recruit who has since joined) keeps theirs and goes on below.
+    if not entry and self:IsGuildMember(sender) then return end
 
     if not entry then
         isNew = true
@@ -182,6 +217,8 @@ function R:OnChannelMessage(text, sender, _, _, _, _, _, _, channelName)
         if lower:find(pattern) then hit = true break end
     end
     if not hit then return end
+    -- a guildmate asking for a guild is no lead (after the pattern: the roster is asked only on a hit)
+    if self:IsGuildMember(sender) then return end
 
     NS.db.responders[sender] = {
         name = sender, status = "new", note = "", source = "channel",
@@ -428,6 +465,7 @@ function R:ClearWithStatus(status)
 end
 
 function R:CountNew()
+    self:SweepGuildmates()
     local n = 0
     for _, entry in pairs(NS.db.responders) do
         if entry.status == "new" then n = n + 1 end
@@ -436,6 +474,7 @@ function R:CountNew()
 end
 
 function R:SortedList(filter)
+    self:SweepGuildmates()
     local list = {}
     for _, entry in pairs(NS.db.responders) do
         if not filter or filter == "all" or entry.status == filter then

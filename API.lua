@@ -42,6 +42,9 @@
 -- THE GUILD'S (since version 2, 21 Oct 2026). Everything below is the guild THIS character is in: the
 -- save is the account's, and Nebbinator keeps one book per guild (Core/Fence.lua) - an alt in another
 -- guild answers about its own guild, never the main's.
+--   GUILDMATES ARE NOT RECRUITS (4.0.4): somebody in the guild roster never lands as "new" on the desk or
+--   the guild's list, and a "new" row saved before that is dropped when Recruits/Recruit/CountNew/Status/
+--   Team is asked. A guildmate's row someone worked (contacted, invited, trial...) stays.
 --   NebbinatorAPI.Team()           -> the guild's list of prospects, newest first: { name, status, by (who
 --                                     is talking to them), at, class = "MAGE" | nil, level = n | nil,
 --                                     note = | nil } - class, level and note only on an officer's client
@@ -95,6 +98,12 @@ function API.Ready()
   return DB() ~= nil
 end
 
+-- guildmates are not recruits (5 Nov 2026): a saved "new" row about one goes before a list is answered
+local function Sweep()
+  local R = NS.Responders
+  if R and R.SweepGuildmates then pcall(R.SweepGuildmates, R) end
+end
+
 local function Copy(e)
   local msgs = {}
   for i, m in ipairs(type(e.messages) == "table" and e.messages or {}) do
@@ -119,6 +128,7 @@ function API.Recruits(status)
   local db, why = DB()
   if not db then return nil, why end
   if status ~= nil and not IsStatus(status) then return nil, "no such status" end
+  Sweep()
   local out = {}
   for key, e in pairs(db.responders) do
     if type(e) == "table" and (status == nil or e.status == status) then
@@ -139,6 +149,7 @@ function API.Recruit(name)
   if not db then return nil, why end
   if type(name) ~= "string" or name == "" then return nil, "no name" end
   local key = NS.Util.StripRealm(name)
+  Sweep()
   local e = db.responders[key]
   if type(e) ~= "table" then return nil, "no such recruit" end
   local c = Copy(e)
@@ -149,6 +160,7 @@ end
 function API.CountNew()
   local db, why = DB()
   if not db then return nil, why end
+  Sweep()
   local n = 0
   for _, e in pairs(db.responders) do
     if type(e) == "table" and e.status == "new" then n = n + 1 end
@@ -177,6 +189,7 @@ function API.Status()
   if M and type(M.lastAny) == "number" and M.lastAny > 0 and GetTime then
     lastPostAt = math.floor(Now() - (GetTime() - M.lastAny) + 0.5)
   end
+  Sweep()
   local recruits, new = 0, 0
   for _, e in pairs(db.responders) do
     if type(e) == "table" then
@@ -224,6 +237,7 @@ end
 function API.Team()
   local db, why = TeamReady()
   if not db then return nil, why end
+  Sweep()
   local out = {}
   for key, row in pairs(NS.Team.List()) do
     if type(row) == "table" then
