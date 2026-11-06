@@ -72,6 +72,7 @@ function UI:RefreshTeam()
     self.teamSend:SetTip("Send to the guild", officer and "Every Nebbinator in the guild takes these needs."
         or ("Officers only - guild ranks 0 to %d."):format(tonumber(NS.db.officerRank) or 1))
 
+    NS.Responders:SweepGuildmates()          -- a guildmate saved as "new" is no recruit (5 Nov 2026)
     local list = {}
     for _, row in pairs(T.List()) do list[#list + 1] = row end
     table.sort(list, function(a, b) return (a.at or 0) > (b.at or 0) end)

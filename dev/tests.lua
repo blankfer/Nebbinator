@@ -63,6 +63,13 @@ H.ok(NS.db.autoReply.busyText ~= nil and NS.db.autoReply.classAware == true and 
 H.eq(NS.db.windows, nil, "old two-window positions dropped")
 H.eq(#NS.db.quickReplies, 4, "four quick replies")
 
+-- THE ROSTER COMES LATER (5 Nov 2026): login asks for it, the server answers a moment after. Until then the
+-- client knows no guildmate - and neither may the addon pretend to.
+H.ok(H.rosterAsked, "login asks the game for the guild roster")
+H.ok(not NS.Responders:IsGuildMember("Kumlust"), "before the answer, nobody is known to be in the guild")
+H.ok(H.RosterArrives(), "(the roster's answer arrives)")
+H.ok(NS.Responders:IsGuildMember("Kumlust"), "after it, the guild is known")
+
 H.section("one window, seven pages, the desk first")
 local UI = NS.UI
 H.ok(UI.frame ~= nil, "window built at login")
@@ -972,7 +979,8 @@ do
     H.eq(R.hidden.CHAT_MSG_WHISPER, 2, "both are counted")
     H.eq(#H.prints, said + 1, "the player is told once, not per whisper")
     H.ok(tostring(H.prints[#H.prints]):find("it is in your chat", 1, true), "and told where it went")
-    R:OnWhisper("recruiting? resto shaman", "Kumlust")
+    -- (a stranger: "Kumlust" is me, in the guild - and a guildmate lands nowhere since 5 Nov 2026)
+    R:OnWhisper("recruiting? resto shaman", "Kumstranger")
     H.eq(count(NS.db.responders), 1, "a readable whisper lands as before")
     R:OnWhisper(secret(), "Other")
     H.eq(#H.prints, said + 2, "and the next lockdown is told again")
@@ -1793,6 +1801,49 @@ end)()
     NS.Responders.rosterDirty = true
     NS.Responders.me = nil
 
+    -- THE TEST BUTTONS WHISPERED NOBODY (4.0.4): Replies' Test and "Send the reply to myself" sent to
+    -- UnitName("player") - on Forever the first name, which reaches nobody and says nothing. The default
+    -- stand-in has no surname (kinder than the client), so this section gives him one.
+    H.section("whole names: the test replies reach me")
+    H.raid = { { name = "Kumlust Wildhammer" } }
+    NS.db.previewMode = false
+    UI:ShowTab("Replies")
+    NS.db.quickReplies[1].text = "quick one"
+    local before = #H.sent
+    UI.quickWidgets[1].test:Click()
+    local w = H.sent[before + 1]
+    H.eq(w and w.chatType, "WHISPER", "a quick reply's Test whispers")
+    H.eq(w and w.target, "Kumlust Wildhammer", "to my whole name, not the first name alone")
+    NS.db.autoReply.text = "auto one"
+    before = #H.sent
+    H.ok(UI:Run("testReply"), "Send the reply to myself is a button")
+    w = H.sent[before + 1]
+    H.eq(w and w.target, "Kumlust Wildhammer", "the auto-reply's test goes to my whole name too")
+    -- AND IT COMES BACK to me as a whisper: not a recruit, never auto-replied to (Arn, 5 Nov) - here with
+    -- no guild roster at all, the guildless player the guild check cannot help
+    R.me = nil
+    local keepRoster = R.IsGuildMember
+    R.IsGuildMember = function() return false end
+    before = #H.sent
+    R:OnWhisper("quick one", "Kumlust Wildhammer", nil,nil,nil,nil,nil,nil,nil,nil,nil,nil)
+    R.IsGuildMember = keepRoster
+    H.eq(NS.db.responders["Kumlust Wildhammer"], nil, "my own test whisper is not on my desk")
+    H.eq(#H.sent, before, "and nothing answers it")
+    -- {player} in an ad is the name a whisper reaches (Arn, 5 Nov: "make it the whole name too")
+    H.eq(NS.Message:Render("whisper {player}"), "whisper Kumlust Wildhammer", "{player} is my whole name")
+    -- a name the game hides (a secret) is not whispered, and nothing throws
+    local hidden = setmetatable({}, { __concat = function() error("attempt to concatenate a secret value", 2) end })
+    local keepIs, keepUN, keepGUN = _G.issecretvalue, _G.UnitName, _G.GetUnitName
+    _G.issecretvalue = function(v) return v == hidden end
+    _G.UnitName, _G.GetUnitName = function() return hidden end, function() return hidden end
+    before = #H.sent
+    H.ok(pcall(UI.Run, UI, "testReply"), "a hidden name does not throw")
+    H.eq(#H.sent, before, "and nothing is whispered to it")
+    local okR, rendered = pcall(NS.Message.Render, NS.Message, "whisper {player}")
+    H.ok(okR and type(rendered) == "string" and rendered:match("^whisper%s*$"), "a hidden name: {player} renders empty, nothing throws", tostring(rendered))
+    _G.issecretvalue, _G.UnitName, _G.GetUnitName = keepIs, keepUN, keepGUN
+    H.raid = { { name = "Kumlust" } }
+
     H.section("the Stats page")
     NS.db.stats = { posts = { { at = now, where = "GuildRecruitment", tpl = "Standard", whispers = 3 },
                               { at = now - 600, where = "LookingForGroup", tpl = "Roles only", whispers = 0 } } }
@@ -1869,6 +1920,165 @@ end)()
     H.ok(A.Open("Team") and UI:ShownTab() == "Team", "(api) Open(\"Team\")")
     UI:Hide()
     NS.db.team = {}
+end)()
+
+-- GUILDMATES ARE NOT RECRUITS (Arn, 5 Nov 2026, BiS Guild's RECRUITS tab): "Lashback Trappin", a member, and
+-- "Chainheal Ryangosling", an officer, sat on everyone's list as "new". Anybody who whispered got a desk row
+-- and a REC to the whole guild - the roster only ever decided the auto-reply. Forever names are whole.
+;(function()
+    local R, T, A, UI = NS.Responders, NS.Team, _G.NebbinatorAPI, NS.UI
+    local now = os.time()
+    local LASH, CHAIN, FRESH = "Lashback Trappin", "Chainheal Ryangosling", "Fresh Face"
+    local wasPreview, wasLead = NS.db.previewMode, NS.db.leadFinder
+    NS.db.previewMode, NS.db.leadFinder = false, true
+    local ar = NS.db.autoReply
+    local keepSound, keepOnly, keepReply = ar.playSound, ar.soundOnlyNew, ar.enabled
+    ar.playSound, ar.soundOnlyNew, ar.enabled = true, true, false
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 }, { name = LASH .. "-Dreamscythe", rank = 4 },
+                { name = CHAIN .. "-Dreamscythe", rank = 1 } }
+    R.rosterDirty = true
+    local function recAbout(name)
+        local all = {}
+        for _, w in ipairs(H.wire) do all[#all + 1] = w end
+        for _, w in ipairs(_G.LibBiSComm.outbox or {}) do all[#all + 1] = w end
+        for _, w in ipairs(all) do
+            if w.msg:find("NEB", 1, true) and w.msg:find("REC", 1, true) and w.msg:find(name, 1, true) then return w.msg end
+        end
+        return nil
+    end
+    local said, keepSay = {}, NS.Say
+    NS.Say = function(text, colour) said[#said + 1] = text return keepSay(text, colour) end
+    local function saidAbout(name)
+        for _, s in ipairs(said) do if s:find(name, 1, true) then return s end end
+    end
+    local heard = {}
+    A.RegisterCallback("guildmates", "Nebbinator_NewRecruit", function(_, name) heard[#heard + 1] = name end)
+    local function fresh()
+        NS.db.responders, NS.db.team, H.wire, said, heard = {}, {}, {}, {}, {}
+        if _G.LibBiSComm.outbox then wipe(_G.LibBiSComm.outbox) end
+    end
+
+    H.section("guildmates are not recruits: a whisper")
+    fresh()
+    local sounds = #H.sounds
+    R:OnWhisper("raid tonight?", LASH .. "-Dreamscythe", nil, nil, nil, nil, nil, nil, nil, nil, nil, "Player-1-2")
+    H.eq(NS.db.responders[LASH], nil, "a guildmate's whisper makes no desk row")
+    H.eq(T.List()[LASH], nil, "and no row on the guild's list")
+    H.eq(recAbout(LASH), nil, "and the guild hears no REC about them")
+    H.eq(saidAbout(LASH), nil, "no \"whispered\" line", saidAbout(LASH))
+    H.eq(#H.sounds, sounds, "no sound")
+    H.eq(#heard, 0, "and no NewRecruit callback")
+    R:OnWhisper("recruiting?", FRESH .. "-Dreamscythe")
+    H.ok(NS.db.responders[FRESH] and NS.db.responders[FRESH].status == "new", "a stranger's whisper still lands on the desk")
+    H.ok(recAbout(FRESH), "and the guild still hears about them")
+    H.ok(saidAbout(FRESH) and #H.sounds == sounds + 1 and heard[1] == FRESH, "with the line, the sound and the callback")
+
+    H.section("guildmates are not recruits: the lead finder")
+    fresh()
+    R:OnChannelMessage("lf guild anyone?", CHAIN .. "-Dreamscythe", nil, nil, nil, nil, nil, nil, "LookingForGroup")
+    H.eq(NS.db.responders[CHAIN], nil, "a guildmate asking for a guild in a channel is no lead")
+    H.ok(recAbout(CHAIN) == nil and #heard == 0 and saidAbout(CHAIN) == nil, "nothing shared, said or called back")
+    R:OnChannelMessage("lf guild anyone?", FRESH .. "-Dreamscythe", nil, nil, nil, nil, nil, nil, "LookingForGroup")
+    H.ok(NS.db.responders[FRESH] and NS.db.responders[FRESH].source == "channel", "a stranger asking still is")
+
+    H.section("guildmates are not recruits: older copies keep sending them")
+    fresh()
+    H.eq(T.Took("Grunt", LASH, "new", "", "", "Grunt", tostring(now), ""), nil, "a REC \"new\" about a guildmate is refused")
+    H.eq(T.List()[LASH], nil, "and lands nowhere")
+    NS.db.team[CHAIN] = { name = CHAIN, status = "new", by = "Grunt", at = now - 60 }
+    T.Took("Grunt", CHAIN, "new", "", "", "Grunt", tostring(now), "")
+    H.eq(T.List()[CHAIN], nil, "one more about a guildmate already listed as new takes the row off")
+    T.Took("Grunt", LASH, "contacted", "", "", "Grunt", tostring(now), "")
+    H.ok(T.List()[LASH] and T.List()[LASH].status == "contacted", "somebody working a guildmate (contacted) is still heard")
+    H.ok(T.Took("Grunt", FRESH, "new", "", "", "Grunt", tostring(now), "") and T.List()[FRESH], "a stranger's REC \"new\" is taken")
+
+    H.section("guildmates are not recruits: rows already saved")
+    fresh()
+    NS.db.responders[LASH] = { name = LASH, status = "new", timestamp = now, messages = {} }
+    NS.db.responders[CHAIN] = { name = CHAIN, status = "contacted", timestamp = now - 5, messages = {} }
+    NS.db.responders[FRESH] = { name = FRESH, status = "new", timestamp = now - 10, messages = {} }
+    NS.db.team[CHAIN] = { name = CHAIN, status = "new", by = "Grunt", at = now }
+    NS.db.team[LASH] = { name = LASH, status = "trial", by = "Grunt", at = now - 5 }
+    NS.db.team[FRESH] = { name = FRESH, status = "new", by = "Grunt", at = now - 10 }
+    local team = A.Team()
+    local names = {}
+    for _, r in ipairs(team) do names[r.name] = r.status end
+    H.ok(names[CHAIN] == nil and NS.db.team[CHAIN] == nil, "(api) Team: a saved \"new\" guildmate is swept off the guild's list")
+    H.ok(names[LASH] == "trial" and names[FRESH] == "new", "(api) ...a worked guildmate (trial) and a stranger stay")
+    local recruits = A.Recruits()
+    names = {}
+    for _, r in ipairs(recruits) do names[r.name] = r.status end
+    H.ok(names[LASH] == nil and NS.db.responders[LASH] == nil, "(api) Recruits: a saved \"new\" guildmate is swept off the desk")
+    H.ok(names[CHAIN] == "contacted", "(api) ...a contacted guildmate stays - somebody worked that row")
+    H.ok(names[FRESH] == "new", "(api) ...and a stranger stays")
+    NS.db.responders[LASH] = { name = LASH, status = "new", timestamp = now, messages = {} }
+    H.eq(A.CountNew(), 1, "(api) CountNew counts no guildmate")
+    NS.db.responders[LASH] = { name = LASH, status = "new", timestamp = now, messages = {} }
+    NS.db.team[CHAIN] = { name = CHAIN, status = "new", by = "Grunt", at = now }
+    UI:Open("Desk")
+    local onDesk = false
+    for _, e in ipairs(R:SortedList("all")) do if e.name == LASH then onDesk = true end end
+    H.ok(not onDesk and NS.db.responders[LASH] == nil, "the Desk page sweeps them too")
+    UI:Open("Team")
+    local onTeam = false
+    for _, r in ipairs(UI.teamRows) do if (r.name._text or ""):find(CHAIN, 1, true) then onTeam = true end end
+    H.ok(not onTeam and NS.db.team[CHAIN] == nil, "and the Team page")
+    UI:Hide()
+
+    H.section("guildmates are not recruits: a recruit who joins")
+    fresh()
+    local JOIN = "Newjoin Person"
+    NS.db.responders[JOIN] = { name = JOIN, status = "invited", timestamp = now - 300, messages = {} }
+    H.guild[#H.guild + 1] = { name = JOIN .. "-Dreamscythe", rank = 4 }
+    R.rosterDirty = true
+    R:OnWhisper("thanks for the invite!", JOIN .. "-Dreamscythe")
+    local e = NS.db.responders[JOIN]
+    H.ok(e and e.status == "invited" and #e.messages == 1, "a recruit already on the desk who joined and whispers keeps their row",
+         e and e.status)
+    A.Recruits()
+    H.ok(NS.db.responders[JOIN] ~= nil, "and no sweep takes it (they were worked)")
+
+    H.section("guildmates are not recruits: before the roster is in")
+    fresh()
+    local keepIn = H.rosterIn
+    H.rosterIn = false
+    wipe(R.guildRoster) R.guildRanks = nil
+    R:OnWhisper("raid tonight?", LASH .. "-Dreamscythe")
+    H.ok(NS.db.responders[LASH] ~= nil, "a guildmate who whispers before the roster arrives cannot be told apart (the client knows nobody yet)")
+    H.rosterIn = keepIn
+    H.RosterArrives()
+    A.Recruits()
+    H.eq(NS.db.responders[LASH], nil, "the first look after the roster arrives sweeps them")
+
+    -- WHAT THE SWEEP COSTS: a walk of the two lists in Lua, and the client only when the roster changed (read
+    -- when asked, never when pinged - the 7 Oct rule).
+    local Cost = dofile("../_bisdev/dev/cost.lua")
+    fresh()
+    for i = 1, R.KEEP_MAX do NS.db.responders["P" .. i] = { name = "P" .. i, status = "new", timestamp = now - i, messages = {} } end
+    for i = 1, 100 do NS.db.team["Q" .. i] = { name = "Q" .. i, status = "new", by = "Grunt", at = now - i } end
+    R:IsGuildMember("Kumlust")                                   -- the roster read, as after any first look
+    local clean, cby = Cost.Count(function() A.Team() A.Recruits() A.CountNew() end)
+    H.say(("   cost: sweep of %d desk + 100 guild rows, roster unchanged = %d calls"):format(R.KEEP_MAX, clean))
+    H.eq(clean, 0, "(cost) a sweep with the roster unchanged asks the client nothing", Cost.Top(cby, 4))
+    local realN, realInfo = _G.GetNumGuildMembers, _G.GetGuildRosterInfo
+    local roster = {}
+    for i = 1, 500 do roster[i] = "Member Number" .. i .. "-Dreamscythe" end
+    _G.GetNumGuildMembers = function() return #roster end
+    _G.GetGuildRosterInfo = function(i) return roster[i], "Member", 4 end
+    for _ = 1, 50 do R.frame:Fire("OnEvent", "GUILD_ROSTER_UPDATE") end
+    local dirty, dby = Cost.Count(function() A.Team() A.Recruits() A.CountNew() end)
+    H.say(("   cost: the same after 50 roster pings (500 members) = %d calls"):format(dirty))
+    H.ok(dirty <= 510, "(cost) after fifty pings the roster is read once, not per ping or per row: " .. dirty, Cost.Top(dby, 4))
+    _G.GetNumGuildMembers, _G.GetGuildRosterInfo = realN, realInfo
+    R.rosterDirty = true
+
+    A.UnregisterCallback("guildmates", "Nebbinator_NewRecruit")
+    NS.Say = keepSay
+    NS.db.responders, NS.db.team = {}, {}
+    H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
+    R.rosterDirty = true
+    NS.db.previewMode, NS.db.leadFinder = wasPreview, wasLead
+    ar.playSound, ar.soundOnlyNew, ar.enabled = keepSound, keepOnly, keepReply
 end)()
 
 H.report()

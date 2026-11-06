@@ -1,5 +1,11 @@
 # Nebbinator
 
+## 4.0.4
+
+- **The test reply buttons reach you.** On Replies, a quick reply's **Test** and **Send the reply to myself** whispered your first name only, and on Forever a whisper needs the whole "Name Surname" - so the test went nowhere, without a word. They whisper your whole name now. And the whisper that comes back to you no longer lands on your own desk as a recruit, or gets your auto-reply sent back at you.
+- **`{player}` in your ad is your whole name.** It printed your first name only, so "whisper {player}" in an ad pointed people at a name a whisper cannot reach.
+- **Guildmates are not recruits.** A guildmate who whispered you, or asked for a guild in a channel, landed on your desk as "new" - and on everyone's recruit list in the guild (BiS Guild's RECRUITS tab too). Guildmates who whisper you no longer land on the recruit list, "new" news about a guildmate from an older Nebbinator in the guild is ignored, and guildmates already sitting there as "new" are cleared the next time you look. Somebody you actually worked with (contacted, invited, on trial) stays, even after they join.
+
 ## 4.0.3
 
 - **The Deeprun Tram's timetable, for the whole guild.** With the shared BiS lib's new version, riding the Deeprun Tram with any BiS addon times it for your guild, the way the zeppelins and boats already are - BiS Tools' ride card and BiS Shell's TRAM-TRAK read it.

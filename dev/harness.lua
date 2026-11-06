@@ -358,11 +358,17 @@ function H.Member(unit)
 end
 -- FOREVER'S NAMES (measured 18 Oct 2026): UnitName is the FIRST name ("Chain"), GetUnitName(unit, false) the
 -- whole one ("Chain Healz"). An H.raid entry's `name` is the whole name; the player's is H.raid[1]'s.
+-- KINDER THAN THE CLIENT, KNOWN: the default stand-in "Kumlust" has no surname, so for him the two answers
+-- AGREE and a whisper to UnitName("player") passes. Forever has no surname-less players. Any test of a path
+-- that names ME (a whisper to myself, my row's `by`) sets H.raid[1] to a whole name first - the test reply
+-- buttons whispered the first name for weeks with the suite green (4.0.4). 31 lines of the suite lean on
+-- the plain default; flipping it is its own change.
 _G.UnitName = function(unit)
     local m = H.Member(unit or "player")
     local whole = m and m.name or "Kumlust"
     return (whole:match("^(%S+)") or whole)
 end
+-- the client takes (unit, showServerName); the realm never shows here (H.raid names carry none)
 _G.GetUnitName = function(unit)
     local m = H.Member(unit or "player")
     return m and m.name or "Kumlust"
@@ -404,13 +410,29 @@ _G.IsInGuild = function() return H.myGuild ~= nil end
 -- the roster: name-realm, rank name, rank index (0 = guild master) - as the client answers
 H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
 H.RANKS = { [0] = "Guild Master", "Officer", "Veteran", "Raider", "Member" }
-_G.GetNumGuildMembers = function() return #H.guild end
+-- THE ROSTER IS ONLY KNOWN AFTER THE ROSTER CALL (5 Nov 2026, guildmates on the recruit list). The client
+-- answers 0 members until C_GuildInfo.GuildRoster() has asked the server AND the answer has come back
+-- (GUILD_ROSTER_UPDATE). The mock used to know every member from the first line, so "a guildmate whispers
+-- before the roster is in" was untestable. H.rosterAsked: the call was made; H.RosterArrives(): the server's
+-- answer lands and every frame registered for GUILD_ROSTER_UPDATE hears it.
+H.rosterAsked, H.rosterIn = false, false
+local function rosterKnown() return H.rosterAsked and H.rosterIn end
+_G.GetNumGuildMembers = function() return rosterKnown() and #H.guild or 0 end
 _G.GetGuildRosterInfo = function(i)
-    local m = H.guild[i]
+    local m = rosterKnown() and H.guild[i]
     if not m then return nil end
     return m.name, H.RANKS[m.rank] or "Member", m.rank
 end
-_G.C_GuildInfo = { GuildRoster = function() end }
+_G.C_GuildInfo = { GuildRoster = function() H.rosterAsked = true end }
+function H.RosterArrives()
+    if not H.rosterAsked then return false end          -- nobody asked: the server sends nothing
+    H.rosterIn = true
+    for _, fr in ipairs(H.frames) do
+        local fn = fr._events.GUILD_ROSTER_UPDATE and fr._scripts.OnEvent
+        if fn then fn(fr, "GUILD_ROSTER_UPDATE") end
+    end
+    return true
+end
 _G.CanGuildInvite = function() return true end
 _G.GuildInvite = function(n) H.guildInvited = n end
 _G.InviteUnit = function(n) H.invited = n end
@@ -459,7 +481,7 @@ _G.C_FriendList = {
 --------------------------------------------------------------------
 
 H.wire = {}            -- every addon message this client put on the wire
-H.raid = { { name = "Kumlust" } }
+H.raid = { { name = "Kumlust" } }   -- no surname: kinder than Forever, see UnitName above
 H.inRaid = false
 
 _G.C_ChatInfo = {

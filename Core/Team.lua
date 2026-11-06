@@ -86,6 +86,8 @@ function T.Changed(entry)
     if not NS.Fence.Ready() then return false end                   -- which guild's? not known yet
     -- my own copy first, so the officer who is also the recruiter sees it at once
     T.Took(T.Me(), entry.name, entry.status, entry.class, entry.level, T.Me(), entry.timestamp or time(), entry.note)
+    -- a guildmate's row put back to "new" is nobody's news (T.Took refused my own copy too)
+    if (entry.status or "new") == "new" and NS.Responders:IsGuildMember(entry.name) then return false end
     local lib = Lib()
     if not (lib and lib.SendTo and IsInGuild and IsInGuild()) then return false end
     return lib:SendTo("GUILD", T.MOD, "REC", clean(entry.name, 48), entry.status or "new", entry.class or "",
@@ -99,6 +101,16 @@ function T.Took(sender, name, status, class, level, by, at, note)
     local key = U.StripRealm(name)
     local L = T.List()
     local old = L[key]
+    -- GUILDMATES ARE NOT RECRUITS (5 Nov 2026): older copies in the guild still send "new" about anybody who
+    -- whispered them. Refused, and a "new" row already here about them goes. A worked row (contacted, trial...)
+    -- is still heard: somebody is talking to them on purpose.
+    if (status or "new") == "new" and NS.Responders:IsGuildMember(key) then
+        if old and old.status == "new" then
+            L[key] = nil
+            if NS.UI and NS.UI.OnTeamChanged then NS.UI:OnTeamChanged() end
+        end
+        return nil
+    end
     at = tonumber(at) or time()
     if old and (old.at or 0) > at then return old end                -- an older word about them
     local row = { name = key, status = status or "new", by = U.StripRealm(by or sender or "?"), at = at }
