@@ -1829,6 +1829,8 @@ end)()
     R.IsGuildMember = keepRoster
     H.eq(NS.db.responders["Kumlust Wildhammer"], nil, "my own test whisper is not on my desk")
     H.eq(#H.sent, before, "and nothing answers it")
+    -- {player} in an ad is the name a whisper reaches (Arn, 5 Nov: "make it the whole name too")
+    H.eq(NS.Message:Render("whisper {player}"), "whisper Kumlust Wildhammer", "{player} is my whole name")
     -- a name the game hides (a secret) is not whispered, and nothing throws
     local hidden = setmetatable({}, { __concat = function() error("attempt to concatenate a secret value", 2) end })
     local keepIs, keepUN, keepGUN = _G.issecretvalue, _G.UnitName, _G.GetUnitName
@@ -1837,6 +1839,8 @@ end)()
     before = #H.sent
     H.ok(pcall(UI.Run, UI, "testReply"), "a hidden name does not throw")
     H.eq(#H.sent, before, "and nothing is whispered to it")
+    local okR, rendered = pcall(NS.Message.Render, NS.Message, "whisper {player}")
+    H.ok(okR and type(rendered) == "string" and rendered:match("^whisper%s*$"), "a hidden name: {player} renders empty, nothing throws", tostring(rendered))
     _G.issecretvalue, _G.UnitName, _G.GetUnitName = keepIs, keepUN, keepGUN
     H.raid = { { name = "Kumlust" } }
 

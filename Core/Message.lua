@@ -148,7 +148,9 @@ function M:Tokens()
         content        = U.Trim(NS.db.content),
         pre            = U.Trim(NS.db.preText),
         post           = U.Trim(NS.db.postText),
-        player         = UnitName("player") or "",
+        -- the whole "Name Surname" (Arn, 5 Nov): an ad that says "whisper {player}" must point at a name a
+        -- whisper reaches, and Forever's UnitName is the first name alone. Hidden by the game: empty.
+        player         = U.WholeName("player") or "",
         level          = tostring(UnitLevel("player") or ""),
         realm          = GetRealmName() or "",
         faction        = UnitFactionGroup("player") or "",
