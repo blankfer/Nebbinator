@@ -2,7 +2,7 @@
 
 ## 4.0.4
 
-- **The test reply buttons reach you.** On Replies, a quick reply's **Test** and **Send the reply to myself** whispered your first name only, and on Forever a whisper needs the whole "Name Surname" - so the test went nowhere, without a word. They whisper your whole name now.
+- **The test reply buttons reach you.** On Replies, a quick reply's **Test** and **Send the reply to myself** whispered your first name only, and on Forever a whisper needs the whole "Name Surname" - so the test went nowhere, without a word. They whisper your whole name now. And the whisper that comes back to you no longer lands on your own desk as a recruit, or gets your auto-reply sent back at you.
 - **Guildmates are not recruits.** A guildmate who whispered you, or asked for a guild in a channel, landed on your desk as "new" - and on everyone's recruit list in the guild (BiS Guild's RECRUITS tab too). Guildmates who whisper you no longer land on the recruit list, "new" news about a guildmate from an older Nebbinator in the guild is ignored, and guildmates already sitting there as "new" are cleared the next time you look. Somebody you actually worked with (contacted, invited, on trial) stays, even after they join.
 
 ## 4.0.3

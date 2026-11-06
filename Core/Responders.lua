@@ -135,6 +135,10 @@ function R:OnWhisper(text, sender, _, _, _, _, _, _, _, _, _, guid)
     self.toldHidden = false
     sender = U.StripRealm(sender or "")
     if sender == "" then return end
+    -- MY OWN TEST WHISPER (Replies' Test / "send the reply to myself", 4.0.4) is not a recruit, and is
+    -- never auto-replied to - guildless, or before the roster arrives, the guild check cannot catch it
+    if not R.me then R.me = U.WholeName("player") end
+    if sender == R.me then return end
 
     local db = NS.db.responders
     local entry = db[sender]

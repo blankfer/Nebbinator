@@ -1819,6 +1819,16 @@ end)()
     H.ok(UI:Run("testReply"), "Send the reply to myself is a button")
     w = H.sent[before + 1]
     H.eq(w and w.target, "Kumlust Wildhammer", "the auto-reply's test goes to my whole name too")
+    -- AND IT COMES BACK to me as a whisper: not a recruit, never auto-replied to (Arn, 5 Nov) - here with
+    -- no guild roster at all, the guildless player the guild check cannot help
+    R.me = nil
+    local keepRoster = R.IsGuildMember
+    R.IsGuildMember = function() return false end
+    before = #H.sent
+    R:OnWhisper("quick one", "Kumlust Wildhammer", nil,nil,nil,nil,nil,nil,nil,nil,nil,nil)
+    R.IsGuildMember = keepRoster
+    H.eq(NS.db.responders["Kumlust Wildhammer"], nil, "my own test whisper is not on my desk")
+    H.eq(#H.sent, before, "and nothing answers it")
     -- a name the game hides (a secret) is not whispered, and nothing throws
     local hidden = setmetatable({}, { __concat = function() error("attempt to concatenate a secret value", 2) end })
     local keepIs, keepUN, keepGUN = _G.issecretvalue, _G.UnitName, _G.GetUnitName
