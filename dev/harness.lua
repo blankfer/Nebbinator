@@ -144,19 +144,22 @@ local function newFrame(ftype, name, parent)
     local fr = {
         _type = ftype, _name = name, _parent = parent,
         _scripts = {}, _events = {}, _shown = true,
-        _w = 200, _h = 24, _text = "", _enabled = true,
+        _text = "", _enabled = true,
     }
     H.frames[#H.frames + 1] = fr
 
     function fr:GetName() return self._name end
     function fr:GetParent() return self._parent end
-    -- _w starts at 200 so GetWidth never answers nil; _wSet says the addon
-    -- really gave it a width, which is the only width H.fitsIn will trust
+    -- AN UNSIZED FRAME ANSWERS 0, LIKE THE CLIENT (8 Nov 2026, the dashboard round): it used to answer 200 x 24, so
+    -- a layout that divides the room it has could never meet the "no room yet" it gets before the first layout
+    -- pass. _wSet says the addon really gave it a width, which is the only width H.fitsIn will trust.
     function fr:SetSize(w, h) self._w, self._h, self._wSet = w, h, true end
     function fr:SetWidth(w) self._w, self._wSet = w, true end
     function fr:SetHeight(h) self._h = h end
-    function fr:GetWidth() return self._w end
-    function fr:GetHeight() return self._h end
+    function fr:GetWidth() return self._w or 0 end
+    function fr:GetHeight() return self._h or 0 end
+    -- which mouse buttons it listens for (the client clicks a Button with the left one only until told)
+    function fr:RegisterForClicks(...) self._clicks = { ... } end
     -- Enough anchor maths to catch a window that WALKS. These used to be flat
     -- constants, so `Relayout` could drop the frame by its own height on every
     -- call and no test could ever see it. A frame anchored to UIParent's
@@ -213,7 +216,18 @@ local function newFrame(ftype, name, parent)
     function fr:RegisterEvent(e) self._events[e] = true end
     function fr:UnregisterAllEvents() self._events = {} end
     function fr:Fire(script, ...) local fn = self._scripts[script]; if fn then return fn(self, ...) end end
-    function fr:Click(button) return self:Fire("OnClick", button or "LeftButton") end
+    -- a button the client was never told to hear the right button on ignores a right-click (default: LeftButtonUp)
+    function fr:Click(button)
+        button = button or "LeftButton"
+        if button ~= "LeftButton" and self._type == "Button" then
+            local hears = false
+            for _, c in ipairs(self._clicks or {}) do
+                if c == "AnyUp" or c == "AnyDown" or c:find("^" .. button) then hears = true end
+            end
+            if not hears then return end
+        end
+        return self:Fire("OnClick", button)
+    end
     function fr:SetEnabled(v) self._enabled = v and true or false end
     function fr:IsEnabled() return self._enabled end
     function fr:EnableMouse(v) self._mouse = v end

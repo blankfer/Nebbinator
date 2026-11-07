@@ -2402,7 +2402,9 @@ end)()
         H.ok(#addons == 1 and addons[1].name == "BiS>", "(page) one entry in the game's AddOns list")
         local spec = page and page.spec or {}
         H.eq(spec.title, "Nebbinator", "(page) its title")
-        H.eq(spec.window and spec.window(), UI:BuildOptions(), "(page) it holds the options window")
+        -- THE FAMILY RULE (kit Settings minor 3, Arn 8 Nov: "do it for the other ones"): the page is the kit's dashboard
+        H.ok(type(spec.build) == "function" and type(spec.refresh) == "function", "(page) it draws the kit's dashboard")
+        H.eq(spec.window, nil, "(page) and needs no stand-in button to the options window")
         H.eq(spec.api and spec.api.name, "NebbinatorAPI", "(page) and names the API")
         H.ok(type(spec.about) == "string" and spec.about ~= "", "(page) a line about what it does")
         local keepResp, ar = NS.db.responders, NS.db.autoReply
@@ -2434,16 +2436,111 @@ end)()
         H.eq(win:GetScale(), scaleWas, "(page) and its scale")
         H.eq(win:IsShown(), false, "(page) and leaves it hidden")
         local fb = page.frame.body
-        H.ok(page.frame.state and page.frame.state:IsShown()
-             and page.frame.state:GetText() == UI:SettingsStatus(), "(page) it shows the status line")
-        H.ok(page.frame.optBtn and page.frame.optBtn:IsShown(), "(page) and a button: the options window")
-        H.ok(page.frame.optBtn and page.frame.optBtn:GetParent() == fb, "(page) the button sits in the page's body")
-        if page.frame.optBtn then page.frame.optBtn:Click() end
-        H.eq(win:IsShown(), true, "(page) its click shows the options window")
-        H.eq(win:GetParent(), parentWas, "(page) where it always was")
+        H.ok(not (page.frame.optBtn and page.frame.optBtn:IsShown()), "(page) no stand-in button: the page is drawn")
+        H.ok(not (page.frame.state and page.frame.state:IsShown()), "(page) and no bare status line")
+        -- THE DASHBOARD: a row per section down the left, written down here, never derived from the code under test
+        local dash = fb and fb.dash
+        H.ok(dash ~= nil, "(dash) showing the page builds the dashboard")
+        dash = dash or { rows = {}, pages = {}, detail = {} }
+        local WANT = { "the desk", "posting", "auto-reply", "the bell", "party scout", "lead finder", "the guild",
+                       "the channel" }
+        H.eq(#dash.rows, #WANT, "(dash) one row per section")
+        for i, title in ipairs(WANT) do
+            H.eq(dash.rows[i] and dash.rows[i].name:GetText(), title, "(dash) section " .. i)
+        end
+        H.eq(dash.list and dash.list.head:GetText(), "SECTIONS", "(dash) the list's title")
+        local function rowOf(title)
+            for _, r in ipairs(dash.rows) do if r.name:GetText() == title then return r end end
+        end
+        local function pick(title) local r = rowOf(title) if r then r:Click("LeftButton") end return r end
+        local function ctlOf(key, label)
+            for _, r in ipairs(dash.pages[key] or {}) do if r.opt.label == label then return r end end
+        end
+        H.eq(dash.selected, "desk", "(dash) the desk is picked first")
+        H.ok(dash.detail.open:IsShown(), "(dash) the desk has its window button")
+        -- picking a section shows its rows - the SAME option tables the options window's rows hold
+        pick("the bell")
+        H.eq(dash.selected, "bell", "(dash) a click picks the bell")
+        local bellRows = dash.pages.bell or {}
+        H.eq(#bellRows, 2, "(dash) the bell's two settings")
+        H.ok(bellRows[1] and bellRows[1]:IsShown(), "(dash) and they show")
+        local only = ctlOf("bell", "only the first one")
+        local function winRow(label)
+            for _, r in ipairs(win.rows) do if r.opt and r.opt.label == label then return r end end
+        end
+        H.ok(only and winRow("only the first one") and only.opt == winRow("only the first one").opt,
+             "(dash) the dashboard's row and the window's row are the same option table")
+        -- flipping a setting in the dashboard changes the saved value the options window shows
+        local onlyWas = NS.db.autoReply.soundOnlyNew and true or false
+        if only then only.sw:Click() end
+        H.eq(NS.db.autoReply.soundOnlyNew and true or false, not onlyWas, "(dash) its switch flips the saved value")
+        win:Paint()
+        H.eq(winRow("only the first one").ctl.on, not onlyWas, "(dash) and the window's row agrees after its Paint")
+        if only then only.sw:Click() end
+        H.eq(NS.db.autoReply.soundOnlyNew and true or false, onlyWas, "(dash) and back")
+        -- a stepper here is the window's stepper too
+        pick("the guild")
+        local rank = ctlOf("guild", "officers: ranks 0 to")
+        local rankWas = tonumber(NS.db.officerRank) or 1
+        if rank then rank.plus:Click() end
+        H.eq(NS.db.officerRank, math.min(9, rankWas + 1), "(dash) the officer rank steps up")
+        NS.SetOfficerRank(rankWas)
+        -- a section switch goes through the SAME setter as its slash command
+        local realScout, scoutCalls = NS.ToggleScout, 0
+        NS.ToggleScout = function(...) scoutCalls = scoutCalls + 1 return realScout(...) end
+        local scoutWas = NS.db.scout and true or false
+        pick("party scout")
+        dash.detail.switch:Click()
+        H.eq(scoutCalls, 1, "(dash) the scout's big switch calls NS.ToggleScout")
+        H.eq(NS.db.scout and true or false, not scoutWas, "(dash) and the scout flips")
+        H.eq(rowOf("party scout").state:GetText(), scoutWas and "off" or "ON", "(dash) the list says so")
+        SlashCmdList["NEBBINATOR"]("sct")
+        H.eq(scoutCalls, 2, "(dash) /bisn sct goes through the same function")
+        spec.refresh(fb)
+        H.eq(rowOf("party scout").state:GetText(), scoutWas and "ON" or "off", "(dash) the page repaints a slash's change")
+        NS.ToggleScout = realScout
+        H.eq(dash.detail.usage:GetText(), "command:  /bisn scout  (sct)", "(dash) its command at the foot")
+        -- right-click in the list switches a section without picking it
+        local realReply, replyCalls = NS.ToggleAutoReply, 0
+        NS.ToggleAutoReply = function(...) replyCalls = replyCalls + 1 return realReply(...) end
+        local replyWas = NS.db.autoReply.enabled and true or false
+        rowOf("auto-reply"):Click("RightButton")
+        H.eq(replyCalls, 1, "(dash) right-click on auto-reply calls NS.ToggleAutoReply")
+        H.eq(NS.db.autoReply.enabled and true or false, not replyWas, "(dash) and flips it")
+        H.eq(dash.selected, "scout", "(dash) without picking it")
+        rowOf("auto-reply"):Click("RightButton")
+        NS.ToggleAutoReply = realReply
+        -- the switch is a SET, not a flip: asking for what it already is changes nothing
+        local entries = {}
+        for _, r in ipairs(dash.rows) do entries[r.entry.key] = r.entry end
+        local beforeBell = NS.db.autoReply.playSound and true or false
+        entries.bell.switch.set(beforeBell)
+        H.eq(NS.db.autoReply.playSound and true or false, beforeBell, "(dash) setting the bell to what it is leaves it")
+        -- the channel: LibBiSComm's own switch, the one /biscomm uses
+        local lib = _G.LibBiSComm
+        if lib and lib.Enabled then
+            local chanWas = lib:Enabled() and true or false
+            rowOf("the channel"):Click("RightButton")
+            H.eq(lib:Enabled() and true or false, not chanWas, "(dash) the channel's switch is LibBiSComm's")
+            rowOf("the channel"):Click("RightButton")
+            H.eq(lib:Enabled() and true or false, chanWas, "(dash) and back")
+        end
+        -- a section's window button: the desk opens on the desk
+        UI:Hide()
+        pick("the desk")
+        dash.detail.open:Click()
+        H.ok(UI.frame:IsShown() and UI:ShownTab() == "Desk", "(dash) the desk's button opens the window on the desk")
+        UI:Hide()
+        pick("auto-reply")
+        dash.detail.open:Click()
+        H.ok(UI.frame:IsShown() and UI:ShownTab() == "Replies", "(dash) auto-reply's button opens the Replies tab")
+        UI:Hide()
+        -- the options window itself is untouched by all of it
+        H.eq(win:GetParent(), parentWas, "(page) the options window keeps its parent")
+        H.eq(win:GetScale(), scaleWas, "(page) and its scale")
+        H.eq(win:IsShown(), false, "(page) and stays hidden")
         page.frame:Hide()
         page.frame:Fire("OnHide")
-        H.eq(win:IsShown(), true, "(page) leaving the page does not take it back")
         UI:ToggleOptions(false)
         -- THE MINIMAP'S RIGHT CLICK (kit Minimap minor 5, Arn 7 Nov: "when i right click the minimap again it should
         -- close that option window ... we keep them opening how they used to"): the own window, a toggle, never the
