@@ -1,6 +1,6 @@
 # Nebbinator
 
-## Unreleased
+## 4.1.0
 
 - **Clearer windows.** In the options window (and the minimap menu) every button, box and row lights up under the mouse, the window is 20% bigger, and the bottom strip shows which version you are on until you hover a setting.
 - **Short commands.** Every `/bisn` word longer than four letters has a short one too: `/bisn opt` (options), `/bisn test` (preview), `/bisn rep` (auto-reply), `/bisn sct` (scout), `/bisn chan` (channels), `/bisn disc` (Discord link), `/bisn mini` (minimap button), `/bisn rst` (reset the window). The long words still work, and `/bisn help` shows the short word beside each one.
