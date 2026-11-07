@@ -1,5 +1,9 @@
 # Nebbinator
 
+## Unreleased
+
+- **Clearer windows.** In the options window (and the minimap menu) every button, box and row lights up under the mouse, the window is 20% bigger, and the bottom strip shows which version you are on until you hover a setting.
+
 ## 4.0.4
 
 - **The test reply buttons reach you.** On Replies, a quick reply's **Test** and **Send the reply to myself** whispered your first name only, and on Forever a whisper needs the whole "Name Surname" - so the test went nowhere, without a word. They whisper your whole name now. And the whisper that comes back to you no longer lands on your own desk as a recruit, or gets your auto-reply sent back at you.
