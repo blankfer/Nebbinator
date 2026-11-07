@@ -49,7 +49,7 @@ end
 
 NS:Initialize()
 H.ok(NS.db ~= nil, "db exists")
-H.eq(NS.db.dbVersion, 4, "a 3.x save upgraded to v4")
+H.eq(NS.db.dbVersion, 5, "a 3.x save upgraded to v5 (Forever 1.0)")
 H.eq(NS.db.needs.shaman.resto, 2, "its needs kept")
 H.eq(NS.db.needs.druid.balance, 1, "every spec of them")
 H.eq(NS.db.raidTimes.tuesday, "5pm", "its raid times kept")
@@ -60,6 +60,11 @@ H.eq(NS.db.logsUrl, "https://fresh.warcraftlogs.com/character/{region}/{realm}/{
      "the old fixed logs address becomes the one that reads your realm and region")
 H.ok(NS.db.autoReply.busyText ~= nil and NS.db.autoReply.classAware == true and NS.db.scout == true,
      "and what is new is filled in")
+-- FOREVER 1.0: this save never set the bell, the scout or the reminder - 4.x read them as ON / ON / 15, so they
+-- stay that (an existing user keeps what they had); only a NEW install starts quiet (the last section)
+H.ok(NS.db.autoReply.playSound == true and NS.db.scout == true and NS.db.remind == 15,
+     "an existing save keeps the bell, the scout and the reminder as 4.x read them",
+     tostring(NS.db.autoReply.playSound) .. "/" .. tostring(NS.db.scout) .. "/" .. tostring(NS.db.remind))
 H.eq(NS.db.windows, nil, "old two-window positions dropped")
 H.eq(#NS.db.quickReplies, 4, "four quick replies")
 
@@ -1112,6 +1117,7 @@ do
         { "Libs/BiSTheme/Console.lua",              "../BiSTheme/Console.lua" },
         { "Libs/BiSTheme/Options.lua",              "../BiSTheme/Options.lua" },
         { "Libs/BiSTheme/Minimap.lua",              "../BiSTheme/Minimap.lua" },
+        { "Libs/BiSTheme/Settings.lua",             "../BiSTheme/Settings.lua" },
     }
     for _, pr in ipairs(canon) do
         local mine, ref = bytes(pr[1]), bytes(pr[2])
@@ -1867,16 +1873,39 @@ end)()
     H.ok(UI.frame:IsShown(), "left click opens the window")
     b:Click("LeftButton")
     H.ok(not UI.frame:IsShown(), "and closes it")
+    -- FOREVER 1.0, ONE STANDARD (Arn, 7 Nov: "we gotta get everything on the same page"): left = the window,
+    -- right = the options. No game options panel in this run, so the right click falls back to our own window.
+    H.ok(BiSTheme.settingsPages and BiSTheme.settingsPages.Nebbinator, "the BiS> page was asked for at login")
     b:Click("RightButton")
-    H.ok(b.menuFrame and b.menuFrame:IsShown(), "right click opens the menu")
-    b:CloseMenu()
-    local rows, scout = MB.Menu(), nil
-    for _, r in ipairs(rows) do if r.text == "party scout" then scout = r end end
-    H.ok(scout and scout.checked == true, "the menu's party scout says it is on")
-    scout.func()
-    H.eq(NS.db.scout, false, "and turns it off - the same function as /bisn scout")
+    H.ok(UI.opt and UI.opt:IsShown(), "right click opens the options (no game panel here: our own window)")
+    H.ok(not (b.menuFrame and b.menuFrame:IsShown()), "and no menu")
+    H.ok(not UI.frame:IsShown(), "and not the window")
+    b:Click("RightButton")
+    H.ok(not UI.opt:IsShown(), "right click again closes them")
+    -- every switch the old menu carried is a row in the options window
+    local rows = {}
+    for _, sec in ipairs(UI:OptionSections()) do for _, o in ipairs(sec.options) do rows[o.label] = o end end
+    for _, label in ipairs({ "auto-reply", "party scout", "preview - never sends", "alert sound", "remind me to post" }) do
+        H.ok(rows[label] ~= nil, "(options) the old menu's switch is a row: " .. label)
+    end
+    local keepScout = NS.db.scout
+    rows["party scout"].set()
+    H.eq(NS.db.scout, not keepScout, "the options' party scout flips it - the same function as /bisn scout")
     SlashCmdList["NEBBINATOR"]("scout")
-    H.eq(NS.db.scout, true, "/bisn scout turns it back on")
+    H.eq(NS.db.scout, keepScout, "/bisn scout flips it back")
+    -- the tooltip says exactly that
+    local said, keepAdd = {}, GameTooltip.AddLine
+    GameTooltip.AddLine = function(_, line) said[#said + 1] = tostring(line) end
+    b:Fire("OnEnter")
+    GameTooltip.AddLine = keepAdd
+    local tip = table.concat(said, "\n")
+    H.ok(tip:find("left-click  the window", 1, true), "(tooltip) left-click  the window", tip)
+    H.ok(tip:find("right-click  options", 1, true), "(tooltip) right-click  options", tip)
+    H.ok(tip:find("drag  move", 1, true), "(tooltip) drag  move", tip)
+    H.ok(not tip:find("menu", 1, true), "(tooltip) no menu any more", tip)
+    local lefts = 0
+    for _, l in ipairs(said) do if l:find("left-click", 1, true) then lefts = lefts + 1 end end
+    H.eq(lefts, 1, "(tooltip) one left-click line, not two")
     NS.db.responders = { Waiting = { name = "Waiting", status = "new", timestamp = now, messages = {} } }
     MB:Update()
     H.ok(b.opts.tooltip[1]:find("1 new responder", 1, true), "the tooltip counts who waits", b.opts.tooltip[1])
@@ -2292,6 +2321,175 @@ end)()
         if r._isLabel and (r == UI.versionMark or tostring(r._text):find(tostring(NS.VERSION), 1, true)) then inBar = true end
     end
     H.ok(not inBar, "(mark) no label in the header bar carries the version")
+end)()
+
+-- FOREVER 1.0 (Arn, 7 Nov 2026). "every new user that we get will have every module turned off ... anything that
+-- would make a new user go like okay, this add-on is just making random noises" - but "all the main
+-- functionalities start on", and "everybody that already has the addons installed, I don't wanna change default
+-- settings that they have on".
+;(function()
+    local R, S, UI, MB, T = NS.Responders, NS.Scout, NS.UI, NS.Minimap, BiSTheme
+    local now = os.time()
+
+    -- THE GAME HIDES THINGS (7 Nov sweep). A secret says "string" to type() and refuses to be compared or tested
+    -- for truth. Lua 5.1 cannot make a table refuse `~= ""` against a string, or refuse `if`, so the mock records
+    -- instead WHAT WAS DONE to it before the question "is this hidden?" was asked - the client would have thrown
+    -- right there.
+    H.section("forever 1.0: hidden names and hidden units")
+    do
+        local secretMeta = { __index = function(_, k) error("attempt to use a secret value (" .. tostring(k) .. ")", 2) end,
+                             __eq = function() error("attempt to compare a secret value", 2) end,
+                             __concat = function() error("attempt to concatenate a secret value", 2) end }
+        local log = {}
+        local realType, keepIs, keepGUN = type, _G.issecretvalue, _G.GetUnitName
+        local s = setmetatable({}, secretMeta)
+        _G.type = function(v) if getmetatable(v) == secretMeta then log[#log + 1] = "touched" return "string" end return realType(v) end
+        _G.issecretvalue = function(v) if getmetatable(v) == secretMeta then log[#log + 1] = "asked" return true end return false end
+        _G.GetUnitName = function() return s end
+        local okW, got = pcall(NS.Util.WholeName, "party1")
+        _G.type, _G.issecretvalue, _G.GetUnitName = realType, keepIs, keepGUN
+        H.ok(okW, "(hidden) WholeName does not throw on a whole name the game hides", got)
+        H.eq(log[1], "asked", "(hidden) it asks whether the name is hidden BEFORE comparing it (Util.lua WholeName)")
+        H.eq(got, "Kumlust", "(hidden) and falls back to UnitName")
+
+        -- the party scout: "is that me?" and "is that a player?" can come back a secret boolean
+        local keepRaid, keepParty, keepNeed, keepSeen = H.raid, H.inParty, NS.db.needs.shaman.resto, NS.db.scoutSeen
+        H.raid = { { name = "Kumlust" }, { name = "Hidden Stranger", class = "SHAMAN" } }
+        H.inParty, NS.db.needs.shaman.resto, NS.db.scoutSeen = true, 2, {}
+        local look = S.Look("party1")
+        H.ok(look and look.name == "Hidden Stranger", "(hidden) plain answers: the stranger gets a card")
+        local hidden = setmetatable({}, secretMeta)
+        local keepUIU, keepUIP = _G.UnitIsUnit, _G.UnitIsPlayer
+        _G.issecretvalue = function(v) return getmetatable(v) == secretMeta end
+        _G.UnitIsPlayer = function() return hidden end
+        local okP, lookP, whyP = pcall(S.Look, "party1")
+        _G.UnitIsPlayer = keepUIP
+        _G.UnitIsUnit = function() return hidden end
+        local okU, lookU, whyU = pcall(S.Look, "party1")
+        _G.UnitIsUnit, _G.issecretvalue = keepUIU, keepIs
+        H.ok(okP and lookP == nil and whyP == "hidden", "(hidden) a hidden 'is a player' is not tested for truth: no card", whyP)
+        H.ok(okU and lookU == nil and whyU == "hidden", "(hidden) a hidden 'is that me' is not tested for truth: no card", whyU)
+        H.raid, H.inParty, NS.db.needs.shaman.resto, NS.db.scoutSeen = keepRaid, keepParty, keepNeed, keepSeen
+    end
+
+    -- THE BiS> PAGE in the game's options (Esc > Options > AddOns > BiS>). The game's panel stands in the way
+    -- BiSTheme/dev/tests.lua section 10 has it: a subcategory needs a REGISTERED parent; categories answer GetID.
+    H.section("forever 1.0: the BiS> page")
+    do
+        local reg, opened, nextId, addons = {}, {}, 0, {}
+        local function Category(name)
+            nextId = nextId + 1
+            local c = { name = name, id = nextId }
+            function c:GetID() return self.id end
+            reg[c.id] = c
+            return c
+        end
+        _G.Settings = {
+            RegisterCanvasLayoutCategory = function(frame, name) local c = Category(name) c.frame = frame return c, {} end,
+            RegisterAddOnCategory = function(c) c.addon = true addons[#addons + 1] = c end,
+            RegisterCanvasLayoutSubcategory = function(parent, frame, name)
+                if not (parent and parent.addon) then error("parent category is not registered") end
+                local c = Category(name) c.frame, c.parentCat = frame, parent
+                return c, {}
+            end,
+            OpenToCategory = function(id) if not reg[id] then return false end opened[#opened + 1] = reg[id].name return true end,
+        }
+        local keepRoot = T.settingsRoot
+        T.settingsRoot = nil
+        local page = UI:RegisterSettingsPage()
+        H.ok(page and page.category and page.category.name == "BiS> Nebbinator", "(page) BiS> Nebbinator, under BiS>",
+             page and page.category and page.category.name)
+        H.ok(#addons == 1 and addons[1].name == "BiS>", "(page) one entry in the game's AddOns list")
+        local spec = page and page.spec or {}
+        H.eq(spec.title, "Nebbinator", "(page) its title")
+        H.eq(spec.window and spec.window(), UI:BuildOptions(), "(page) it holds the options window")
+        H.eq(spec.api and spec.api.name, "NebbinatorAPI", "(page) and names the API")
+        H.ok(type(spec.about) == "string" and spec.about ~= "", "(page) a line about what it does")
+        local keepResp, ar = NS.db.responders, NS.db.autoReply
+        local keepSound, keepScout, keepReply = ar.playSound, NS.db.scout, ar.enabled
+        NS.db.responders = { A = { name = "A", status = "new", timestamp = now, messages = {} },
+                             B = { name = "B", status = "new", timestamp = now, messages = {} },
+                             C = { name = "C", status = "new", timestamp = now, messages = {} } }
+        ar.playSound, NS.db.scout, ar.enabled = false, false, false
+        H.eq(spec.status and spec.status(), "3 new waiting - bell off - scout off - auto-reply off",
+             "(page) the front page says what is on")
+        ar.playSound, NS.db.scout, ar.enabled = true, true, true
+        NS.db.responders = {}
+        H.eq(spec.status and spec.status(), "nobody new waiting - bell on - scout on - auto-reply on", "(page) and when it is on")
+        ar.playSound, NS.db.scout, ar.enabled = keepSound, keepScout, keepReply
+        NS.db.responders = keepResp
+        UI:Hide()
+        H.ok(spec.open and spec.open.label == "the desk", "(page) the big button: the desk")
+        spec.open.func()
+        H.ok(UI.frame:IsShown() and UI:ShownTab() == "Desk", "(page) it opens the window on the desk")
+        UI:Hide()
+        -- the minimap's right click opens the page now there is one
+        local b = MB.button
+        local optWas = UI.opt:IsShown()
+        b:Click("RightButton")
+        H.eq(opened[#opened], "BiS> Nebbinator", "(page) the minimap's right click opens it")
+        H.eq(UI.opt:IsShown(), optWas, "(page) and does not also toggle the loose options window")
+        _G.Settings = nil
+        T.settingsRoot = keepRoot
+        T.settingsPages.Nebbinator.category, T.settingsPages.Nebbinator.frame = nil, nil
+    end
+
+    -- THE QUIET START. A new install: the desk on (every stranger's whisper is a row), every extra off.
+    H.section("forever 1.0: a new install starts quiet")
+    local keepDB, keepSaved = NS.db, _G.NebbinatorDB
+    _G.NebbinatorDB = nil
+    NS:LoadDB()
+    local db = NS.db
+    H.eq(db.dbVersion, 5, "(new) stamped 5")
+    H.eq(db.autoReply.playSound, false, "(new) no bell on every whisper")
+    H.eq(db.scout, false, "(new) no party scout cards (nor their sound)")
+    H.eq(db.remind, 0, "(new) no post-again reminder card")
+    H.eq(db.autoReply.enabled, false, "(new) no auto-reply")
+    H.eq(db.leadFinder, false, "(new) no lead finder")
+    H.eq(db.previewMode, false, "(new) posts go out when you click them")
+    H.eq(db.minimap.hide, false, "(new) the minimap button shows: it is the way in")
+    local sounds = #H.sounds
+    R:OnWhisper("hi, are you recruiting?", "Quietnew")
+    H.ok(db.responders.Quietnew ~= nil, "(new) the core is on: a stranger's whisper lands on the desk")
+    H.eq(#H.sounds, sounds, "(new) and nothing rings")
+    H.eq(S.Check(), 0, "(new) the scout raises nothing")
+    _G.NebbinatorDB = db
+    NS:LoadDB()
+    H.ok(NS.db.autoReply.playSound == false and NS.db.scout == false and NS.db.remind == 0,
+         "(new) its second load is just as quiet")
+    H.ok(NS.db.responders.Quietnew ~= nil, "(new) and keeps its desk")
+
+    H.section("forever 1.0: an existing save keeps what it had")
+    -- a 4.x save that never wrote the three keys: 4.x read them as bell ON, scout ON, reminder 15
+    _G.NebbinatorDB = { dbVersion = 4, autoReply = { enabled = true, keywords = "inv" }, responders = {} }
+    NS:LoadDB()
+    H.eq(NS.db.dbVersion, 5, "(existing) stamped 5")
+    H.eq(NS.db.autoReply.playSound, true, "(existing) the bell it never set stays on")
+    H.eq(NS.db.scout, true, "(existing) the scout stays on")
+    H.eq(NS.db.remind, 15, "(existing) the reminder stays 15 min")
+    H.eq(NS.db.autoReply.enabled, true, "(existing) its own auto-reply as it left it")
+    H.eq(NS.db.autoReply.keywords, "inv", "(existing) and its words")
+    -- what it chose is kept, either way
+    _G.NebbinatorDB = { dbVersion = 4, autoReply = { playSound = false }, scout = false, remind = 30 }
+    NS:LoadDB()
+    H.ok(NS.db.autoReply.playSound == false and NS.db.scout == false and NS.db.remind == 30,
+         "(existing) switched off before: still off")
+    _G.NebbinatorDB = { dbVersion = 4, autoReply = { playSound = true }, scout = true, remind = 5 }
+    NS:LoadDB()
+    H.ok(NS.db.autoReply.playSound == true and NS.db.scout == true and NS.db.remind == 5,
+         "(existing) switched on before: still on")
+    -- the freeze runs ONCE: a choice made in 5.0 stands at the next load
+    NS.db.autoReply.playSound, NS.db.scout, NS.db.remind = false, false, 0
+    _G.NebbinatorDB = NS.db
+    NS:LoadDB()
+    H.ok(NS.db.autoReply.playSound == false and NS.db.scout == false and NS.db.remind == 0,
+         "(existing) the second load changes nothing: switched off in 5.0, stays off")
+    NS.db.autoReply.playSound = nil
+    _G.NebbinatorDB = NS.db
+    NS:LoadDB()
+    H.eq(NS.db.autoReply.playSound, false, "(existing) a key missing from a 5 save reads as 5.0's default")
+
+    _G.NebbinatorDB, NS.db = keepSaved, keepDB
 end)()
 
 H.report()

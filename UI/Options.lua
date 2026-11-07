@@ -27,7 +27,7 @@ function UI:OptionSections()
     return {
         { title = "nebbinator", options = {
             { kind = "toggle", label = "minimap button",
-              help = "The gold star on the minimap: left click the window, right click a menu.",
+              help = "The gold star on the minimap: left click the window, right click these options.",
               get = function() return not NS.db.minimap.hide end,
               set = function() NS.ToggleMinimap() end },
             { kind = "toggle", label = "BiS channel (/biscomm)",
@@ -128,6 +128,34 @@ end
 function UI:ToggleOptions(want)
     self:BuildOptions():Toggle(want)
     if self.optBtn then self.optBtn:SetMarked(self.opt:IsShown()) end
+end
+
+--- What is on, in a few words - the BiS> front page shows it beside the version.
+function UI:SettingsStatus()
+    local db = NS.db
+    if not db then return "" end
+    local new = NS.Responders:CountNew()
+    local function onoff(v) return v and "on" or "off" end
+    return ("%s - bell %s - scout %s - auto-reply %s"):format(
+        new > 0 and (new .. " new waiting") or "nobody new waiting",
+        onoff(db.autoReply.playSound), onoff(db.scout), onoff(db.autoReply.enabled))
+end
+
+--- FOREVER 1.0 (Arn, 7 Nov 2026: "they'll just see BiS> ... click into that add-on"): Nebbinator's page under the
+--- one BiS> entry in the game's options (Libs\BiSTheme\Settings.lua). It holds this options window. Asked once
+--- at login; without the game's panel the shared kit answers nil and the minimap's right click opens the window
+--- on its own.
+function UI:RegisterSettingsPage()
+    if not (BiSTheme and BiSTheme.SettingsPage) then return nil end
+    return BiSTheme.SettingsPage("Nebbinator", {
+        title  = "Nebbinator",
+        about  = "Guild recruitment: every whisper from somebody outside the guild lands on the desk, with the ad "
+            .. "and the send bar beside it. The bell, the auto-reply, the party scout and the reminder wait for you here.",
+        status = function() return UI:SettingsStatus() end,
+        window = function() return UI:BuildOptions() end,
+        open   = { label = "the desk", func = function() UI:Open("Desk") end },
+        api    = { name = "NebbinatorAPI", about = "the desk, the ad, the guild's list and needs - read-only, plus Open" },
+    })
 end
 
 --- Called from UI:Refresh so the window agrees with a slash command that ran
