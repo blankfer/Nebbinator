@@ -2081,4 +2081,184 @@ end)()
     ar.playSound, ar.soundOnlyNew, ar.enabled = keepSound, keepOnly, keepReply
 end)()
 
+--------------------------------------------------------------------
+-- THE FIVE UI RULES (Arn, 6 Nov 2026; BiSTools is the reference)
+--------------------------------------------------------------------
+;(function()
+    local K = NS.Kit
+    local function alphaOf(t) return t and t._color and t._color[4] end
+    local function pops(t, label)
+        local a = alphaOf(t)
+        H.ok(a and a >= 0.3 and a <= 0.35, label, a)
+    end
+    local function quiet(t, label)
+        local a = alphaOf(t)
+        H.ok(a == nil or a == 0 or (t._shown == false), label, a)
+    end
+    local ar, ag, ab = NS.T.rgb("accent")
+    local ir, ig, ib = K.shade("ink")
+
+    -- 1. SHORT WORDS: every subcommand longer than 4 letters answers to one of 4 or fewer, and the long one
+    -- keeps working. Both must reach the SAME command.
+    H.section("ui rules: short words")
+    local word = NS.SlashWord or function(w) return w end
+    local PAIRS = { responders = "desk", config = "opt", options = "opt", settings = "opt", preview = "test",
+                    reply = "rep", channels = "chan", discord = "disc", scout = "sct", minimap = "mini",
+                    reset = "rst" }
+    for long, short in pairs(PAIRS) do
+        H.ok(#short <= 4, "(short) " .. short .. " is 4 letters or fewer")
+        H.eq(word(short), word(long), "(short) /bisn " .. short .. " is /bisn " .. long)
+        H.eq(word(short:upper()), word(long), "(short) and in capitals")
+    end
+    H.ok(word("opt") ~= word("rep"), "(short) different words stay different commands")
+
+    -- the effect, typed the way the client routes it
+    local keepReply, keepScout, keepHide = NS.db.autoReply.enabled, NS.db.scout, NS.db.minimap.hide
+    H.Slash("/bisn rep");  H.eq(NS.db.autoReply.enabled, not keepReply, "(short) /bisn rep flips auto-reply")
+    H.Slash("/bisn reply"); H.eq(NS.db.autoReply.enabled, keepReply, "(short) /bisn reply flips it back")
+    H.Slash("/bisn sct");  H.eq(NS.db.scout, not keepScout, "(short) /bisn sct flips the scout")
+    H.Slash("/bisn scout"); H.eq(NS.db.scout, keepScout, "(short) /bisn scout flips it back")
+    H.Slash("/bisn mini"); H.eq(NS.db.minimap.hide, not keepHide, "(short) /bisn mini flips the minimap button")
+    H.Slash("/bisn minimap"); H.eq(NS.db.minimap.hide, keepHide, "(short) /bisn minimap flips it back")
+    local keepChan, keepDisc = NS.db.customChannels, NS.db.discord
+    H.Slash("/bisn chan world"); H.eq(NS.db.customChannels, "world", "(short) /bisn chan sets the channels")
+    H.Slash("/bisn disc discord.gg/short"); H.eq(NS.db.discord, "discord.gg/short", "(short) /bisn disc sets the link")
+    NS.SetChannels(keepChan); NS.SetDiscord(keepDisc)
+    NS.db.window = { point = "TOP", relPoint = "TOP", x = 5, y = -5 }
+    H.Slash("/bisn rst"); H.eq(NS.db.window.point, nil, "(short) /bisn rst puts the window back")
+    UI:ToggleOptions(false)
+    H.Slash("/bisn opt"); H.eq(UI.opt and UI.opt:IsShown(), true, "(short) /bisn opt opens the options window")
+    UI:ToggleOptions(false)
+
+    local before = #H.prints
+    H.Slash("/bisn help")
+    local help = {}
+    for i = before + 1, #H.prints do
+        help[#help + 1] = (tostring(H.prints[i]):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))
+    end
+    help = table.concat(help, "\n")
+    for _, short in ipairs({ "opt", "test", "rep", "chan", "disc", "sct", "mini", "rst" }) do
+        H.ok(help:find("(" .. short .. ")", 1, true), "(short) the help shows (" .. short .. ")", help)
+    end
+
+    -- 2. HOVER POP: a 0.3-0.35 wash, an accent edge or a left bar, the label full bright.
+    H.section("ui rules: hover pops")
+    local kb = K.Button(UIParent, "Go", 60, 20, function() end)
+    kb:Fire("OnEnter")
+    pops(kb.fill, "(hover) a kit button washes 0.3-0.35")
+    H.isColor(kb.edge.top._color, ar, ag, ab, "(hover) its edge goes accent")
+    H.isColor(kb.text._color, ir, ig, ib, "(hover) its label goes full bright")
+    kb:Fire("OnLeave")
+    H.eq(alphaOf(kb.fill), 1, "(hover) leaving puts the plain fill back")
+
+    local hb = UI.optBtn
+    hb:Fire("OnEnter")
+    pops(hb.fill, "(hover) a header box washes 0.3-0.35 (it had no wash)")
+    H.isColor(hb.edge.top._color, ar, ag, ab, "(hover) its edge goes accent")
+    H.isColor(hb.text._color, ir, ig, ib, "(hover) its letter goes full bright")
+    hb:Fire("OnLeave")
+    H.eq(alphaOf(hb.fill), 1, "(hover) leaving puts it back")
+
+    local check = UI.controls.autoReply and UI.controls.autoReply.frame
+    H.ok(check ~= nil, "(hover) a check row can be found")
+    if check then
+        check:Fire("OnEnter")
+        pops(check.wash, "(hover) a check row washes 0.3-0.35")
+        H.ok(check.bar and check.bar:IsShown(), "(hover) and shows its left bar")
+        H.isColor(check.label._color, ir, ig, ib, "(hover) its label goes full bright")
+        check:Fire("OnLeave")
+        quiet(check.wash, "(hover) leaving clears the wash")
+        H.ok(not check.bar:IsShown(), "(hover) and the bar")
+    end
+
+    local seg = UI.controls.replyMode and UI.controls.replyMode.pills
+    H.ok(seg ~= nil, "(hover) the pills can be found")
+    if seg then
+        local p = seg[1]
+        p:Fire("OnEnter")
+        pops(p.fill, "(hover) a pill washes 0.3-0.35 (it did nothing)")
+        H.isColor(p.edge.top._color, ar, ag, ab, "(hover) its edge goes accent")
+        H.isColor(p.text._color, ir, ig, ib, "(hover) its label goes full bright")
+        p:Fire("OnLeave")
+        H.ok(alphaOf(p.fill) < 0.3, "(hover) leaving puts it back", alphaOf(p.fill))
+    end
+
+    local ob = UI.controls.override and UI.controls.override.frame
+    H.ok(ob ~= nil, "(hover) the write-my-own box can be found")
+    if ob then
+        ob:Fire("OnEnter")
+        pops(ob.wash, "(hover) write-my-own washes 0.3-0.35")
+        H.ok(ob.bar and ob.bar:IsShown(), "(hover) and shows its left bar")
+        ob:Fire("OnLeave")
+        quiet(ob.wash, "(hover) leaving clears it")
+    end
+
+    UI:ShowTab("Desk")
+    local tab = UI.tabs.Team
+    tab:Fire("OnEnter")
+    pops(tab.hover, "(hover) a rail tab washes 0.3-0.35 (text colour only)")
+    H.ok(tab.mark:IsShown(), "(hover) and shows its bar")
+    H.isColor(tab.label._color, ir, ig, ib, "(hover) its label goes full bright")
+    tab:Fire("OnLeave")
+    quiet(tab.hover, "(hover) leaving clears the wash")
+    H.ok(not tab.mark:IsShown(), "(hover) and the bar of a tab not shown")
+    local mr, mg, mb = NS.T.rgb("muted")
+    H.isColor(tab.label._color, mr, mg, mb, "(hover) and dims the label again")
+    local on = UI.tabs.Desk
+    on:Fire("OnEnter"); on:Fire("OnLeave")
+    H.ok(on.mark:IsShown(), "(hover) the shown tab keeps its bar after the mouse leaves")
+
+    NS.db.responders = { Hovr = { name = "Hovr", status = "new", timestamp = os.time(), messages = {} } }
+    UI.serving = nil
+    UI:LayoutDesk()
+    local row = UI.rows[1]
+    row:Fire("OnEnter")
+    pops(row.bg, "(hover) a desk row washes 0.3-0.35 (it was a 0.7 near-black)")
+    H.ok(row.mark:IsShown(), "(hover) and shows its left bar")
+    row:Fire("OnLeave")
+    quiet(row.bg, "(hover) leaving clears the wash")
+    H.ok(not row.mark:IsShown(), "(hover) and the bar of a row not being served")
+    NS.db.responders = {}
+    UI:LayoutDesk()
+
+    -- 3. ESCAPE closes every top-level window
+    H.section("ui rules: escape")
+    local function special(name)
+        for _, n in ipairs(UISpecialFrames) do if n == name then return true end end
+    end
+    K.ShowCopyBox("x", "t"); NebbinatorCopyBox:Hide()
+    H.ok(special("NebbinatorFrame"), "(escape) the window closes on Escape")
+    H.ok(special("NebbinatorCopyBox"), "(escape) the copy box closes on Escape")
+
+    -- 4. READABLE SIZE: the window's main text is 10 pt and up, so it needs no SetScale(1.2)
+    H.section("ui rules: readable size")
+    H.ok(select(2, UI.tabs.Desk.label:GetFont()) >= 10, "(size) the rail labels are over 9 pt")
+    H.ok(select(2, UI.rows[1].name:GetFont()) >= 10, "(size) the desk rows are over 9 pt")
+
+    -- 5. VERSION MARK: faint, not in the header bar (one bar, one label)
+    H.section("ui rules: version mark")
+    local mark = UI.VersionMark or function() return "" end
+    H.eq(mark("4.0.4", nil), "4.0.4", "(mark) a released copy shows the version alone")
+    H.eq(mark("4.0.4", "feat/ui-rules@9e52109+ 1106-1841"), "4.0.4  9e52109+ 1106-1841",
+         "(mark) a deployed copy shows the version, the commit and when")
+    H.ok(UI.versionMark ~= nil, "(mark) the window has the mark")
+    if UI.versionMark then
+        H.eq(UI.versionMark:GetText(), tostring(NS.VERSION), "(mark) it says the running version")
+        H.ok(UI.versionMark:GetAlpha() <= 0.7, "(mark) faintly", UI.versionMark:GetAlpha())
+        H.ok(UI.versionMark:GetParent() ~= UI.head, "(mark) and not in the header bar")
+        local keep = NS.BUILD
+        NS.BUILD = "main@abc1234 1106-2000"
+        UI:Refresh()
+        H.eq(UI.versionMark:GetText(), tostring(NS.VERSION) .. "  abc1234 1106-2000", "(mark) a stamp shows on refresh")
+        NS.BUILD = keep
+        UI:Refresh()
+    end
+    -- the bar's own label is the prompt (BiSTheme.Console keeps its helpers beside it); none of them is the mark
+    local inBar = false
+    for _, r in ipairs(UI.head._regions or {}) do
+        if r._isLabel and (r == UI.versionMark or tostring(r._text):find(tostring(NS.VERSION), 1, true)) then inBar = true end
+    end
+    H.ok(not inBar, "(mark) no label in the header bar carries the version")
+end)()
+
 H.report()

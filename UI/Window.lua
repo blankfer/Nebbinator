@@ -90,6 +90,8 @@ function UI:Check(page, y, id, label, tip, get, set)
 
     local text = K.fs(b, label, 12, "ink2")
     text:SetPoint("LEFT", box, "RIGHT", 10, 0)
+    b.label = text
+    K.RowHover(b)
 
     local sync = function()
         -- both branches pass a full argument list on purpose
@@ -106,7 +108,9 @@ function UI:Check(page, y, id, label, tip, get, set)
 
     b:SetScript("OnClick", function() set(not get()); UI:Apply() end)
     b:SetScript("OnEnter", function(s)
+        s:Lit(true)
         edge:set("accent", 1)
+        text:SetTextColor(K.shade("ink"))
         if tip and GameTooltip then
             GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
             GameTooltip:AddLine(label)
@@ -114,12 +118,14 @@ function UI:Check(page, y, id, label, tip, get, set)
             GameTooltip:Show()
         end
     end)
-    b:SetScript("OnLeave", function()
+    b:SetScript("OnLeave", function(s)
+        s:Lit(false)
         sync()
         if GameTooltip then GameTooltip:Hide() end
     end)
 
     self:Register(id, get, set, sync)
+    self.controls[id].frame = b        -- the suite hovers it
     sync()
     return y - self.ROW
 end
@@ -151,6 +157,13 @@ function UI:Seg(page, y, id, label, options, get, set)
         p:SetScript("OnClick", function(s) set(s.value); UI:Apply() end)
         pills[#pills + 1] = p
     end
+    for _, p in ipairs(pills) do
+        p:SetScript("OnEnter", function(s)
+            s.fill:SetColorTexture(K.shade("accent", K.HOVER))
+            s.edge:set("accent", 1)
+            s.text:SetTextColor(K.shade("ink"))
+        end)
+    end
 
     local sync = function()
         local v = get()
@@ -166,8 +179,10 @@ function UI:Seg(page, y, id, label, options, get, set)
             end
         end
     end
+    for _, p in ipairs(pills) do p:SetScript("OnLeave", function() sync() end) end
 
     self:Register(id, get, set, sync)
+    self.controls[id].pills = pills    -- the suite hovers them
     sync()
     return y - self.ROW
 end
@@ -334,6 +349,21 @@ end
 function UI:RefreshChrome()
     if not self.frame then return end
     self:PaintSlots()
+    self:PaintVersionMark()
+end
+
+--- "4.0.4" on a released copy; "4.0.4  9e52109+ 1106-1841" on one deploy.sh stamped
+--- ("<branch>@<commit> <MMDD-HHMM>" - the branch is left out, the commit and the time are what tell builds apart).
+function UI.VersionMark(version, build)
+    local v = tostring(version or "dev")
+    local sha = build and build:match("@(%S+)")
+    if not sha then return v end
+    local when = build:match("%s(%S+)$")
+    return v .. "  " .. sha .. (when and (" " .. when) or "")
+end
+
+function UI:PaintVersionMark()
+    if self.versionMark then self.versionMark:SetText(UI.VersionMark(NS.VERSION, NS.BUILD)) end
 end
 
 --------------------------------------------------------------------
@@ -418,7 +448,8 @@ function UI:BuildHeader(f)
     -- and the window is only ever wider than that. From the right: x(12) at -3,
     -- =(12) at -17, o(12) at -31, so the strip owns -3..-43. Nothing else goes
     -- in this bar.
-    -- No logo -- "BiS>" is the brand. No version -- that is on the About page.
+    -- No logo -- "BiS>" is the brand. No version -- that is faint at the foot of
+    -- the rail (UI.VersionMark) and in full on the About page.
     -- No preview pill and no new-responder badge -- both were state, and state
     -- belongs in the prompt's slots.
     self.title = K.fs(head, "", K.LABEL, "ink")
@@ -502,6 +533,12 @@ function UI:BuildBook(f)
     local divider = K.hairline(rail, "edge", false)
     divider:SetPoint("TOPRIGHT"); divider:SetPoint("BOTTOMRIGHT")
 
+    -- the version, faint, in the rail's empty bottom corner (one bar, one label: the header keeps the prompt)
+    self.versionMark = K.fs(rail, "", 8, "dim")
+    self.versionMark:SetPoint("BOTTOMLEFT", rail, "BOTTOMLEFT", 12, 8)
+    self.versionMark:SetAlpha(0.6)
+    self:PaintVersionMark()
+
     local body = CreateFrame("Frame", nil, book)
     body:SetPoint("TOPLEFT", rail, "TOPRIGHT", 1, 0)
     body:SetPoint("BOTTOMRIGHT", book, "BOTTOMRIGHT", -1, 1)
@@ -523,16 +560,29 @@ function UI:BuildBook(f)
         mark:SetColorTexture(K.shade("accent", 1))
         mark:Hide()
 
+        -- under the mouse: a wash, the bar, the label full bright (the shown tab keeps its own when it leaves)
+        local hover = tab:CreateTexture(nil, "ARTWORK")
+        hover:SetAllPoints()
+        hover:SetColorTexture(K.shade("accent", 0))
+
         local label = K.fs(tab, name, 13, "muted")
         label:SetPoint("LEFT", tab, "LEFT", 20, 0)
 
-        tab.glow, tab.mark, tab.label, tab.tabName = glow, mark, label, name
+        tab.glow, tab.mark, tab.label, tab.tabName, tab.hover = glow, mark, label, name, hover
         tab:SetScript("OnClick", function(s) UI:ShowTab(s.tabName) end)
         tab:SetScript("OnEnter", function(s)
-            if UI.shown ~= s.tabName then s.label:SetTextColor(K.shade("ink2")) end
+            s.hover:SetColorTexture(K.shade("accent", K.HOVER))
+            s.mark:Show()
+            s.label:SetTextColor(K.shade("ink"))
         end)
         tab:SetScript("OnLeave", function(s)
-            if UI.shown ~= s.tabName then s.label:SetTextColor(K.shade("muted")) end
+            s.hover:SetColorTexture(K.shade("accent", 0))
+            if UI.shown == s.tabName then
+                s.label:SetTextColor(K.shade("accent"))
+            else
+                s.mark:Hide()
+                s.label:SetTextColor(K.shade("muted"))
+            end
         end)
         self.tabs[name] = tab
 

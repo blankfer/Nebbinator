@@ -21,6 +21,9 @@ K.HEADER = 16
 K.HEAD_A = 0.5
 K.BODY_A = 0.88
 K.LABEL  = 8
+-- HOVER POP (Arn, 6 Nov 2026: "no glow to let me know im good to click it"): everything clickable lights up
+-- under the mouse - this much wash, an accent edge or a left bar, and the label at full brightness.
+K.HOVER  = 0.32
 
 -- the layered near-blacks, darkest (furthest back) to lightest (forward)
 K.SH = {
@@ -114,6 +117,23 @@ function K.hairline(parent, name, horizontal)
     return t
 end
 
+-- A clickable ROW's hover (a check line, a desk line): a wash under it and a 2 px accent bar down its left
+-- side. b:Lit(true) under the mouse, b:Lit(false) when it leaves.
+function K.RowHover(b)
+    b.wash = b:CreateTexture(nil, "BACKGROUND")
+    b.wash:SetAllPoints()
+    b.wash:SetColorTexture(K.shade("accent", 0))
+    b.bar = b:CreateTexture(nil, "ARTWORK")
+    b.bar:SetPoint("TOPLEFT"); b.bar:SetPoint("BOTTOMLEFT"); b.bar:SetWidth(2)
+    b.bar:SetColorTexture(K.shade("accent", 1))
+    b.bar:Hide()
+    function b:Lit(on)
+        self.wash:SetColorTexture(K.shade("accent", on and K.HOVER or 0))
+        if on then self.bar:Show() else self.bar:Hide() end
+    end
+    return b
+end
+
 --------------------------------------------------------------------
 -- flat button
 --------------------------------------------------------------------
@@ -166,9 +186,9 @@ function K.Button(parent, label, w, h, onClick, tone)
     end)
     b:SetScript("OnEnter", function(s)
         if s.enabled then
-            s.fill:SetColorTexture(K.shade(s.tone, 0.18))
+            s.fill:SetColorTexture(K.shade(s.tone, K.HOVER))
             s.edge:set(s.tone, 1)
-            s.text:SetTextColor(K.shade(s.tone))
+            s.text:SetTextColor(K.shade("ink"))
         end
         if s.tipTitle and GameTooltip then
             GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
@@ -216,8 +236,9 @@ function K.HeaderButton(parent, x, label, title, tip, onClick, tone)
 
     b:SetScript("OnClick", function(s, button) if onClick then onClick(s, button) end end)
     b:SetScript("OnEnter", function(s)
+        s.fill:SetColorTexture(K.shade(s.tone, K.HOVER))
         s.edge:set(s.tone, 1)
-        s.text:SetTextColor(K.shade(s.tone))
+        s.text:SetTextColor(K.shade("ink"))
         if title and GameTooltip then
             GameTooltip:SetOwner(s, "ANCHOR_BOTTOM")
             GameTooltip:AddLine(title)

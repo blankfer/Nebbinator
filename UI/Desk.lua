@@ -211,8 +211,21 @@ function UI:AcquireRow(index)
     row.age:SetPoint("RIGHT", row.remove, "LEFT", -6, 0)
     row.age:SetJustifyH("RIGHT")
 
-    row:SetScript("OnEnter", function(s) if not s.isServed then s.bg:SetColorTexture(K.shade("sidebar", 0.7)) end end)
-    row:SetScript("OnLeave", function(s) if not s.isServed then s.bg:SetColorTexture(K.shade("sidebar", 0)) end end)
+    -- under the mouse: the accent wash, the left bar, the class line full bright (the served row keeps its own)
+    row:SetScript("OnEnter", function(s)
+        s.bg:SetColorTexture(K.shade("accent", K.HOVER))
+        s.mark:Show()
+        s.info:SetTextColor(K.shade("ink"))
+    end)
+    row:SetScript("OnLeave", function(s)
+        s.info:SetTextColor(K.shade("ink2"))
+        if s.isServed then
+            s.bg:SetColorTexture(K.shade("accent", 0.16))
+        else
+            s.bg:SetColorTexture(K.shade("sidebar", 0))
+            s.mark:Hide()
+        end
+    end)
 
     self.rows[index] = row
     return row
