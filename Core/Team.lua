@@ -84,10 +84,12 @@ end
 function T.Changed(entry)
     if type(entry) ~= "table" or not entry.name then return false end
     if not NS.Fence.Ready() then return false end                   -- which guild's? not known yet
+    -- A WHISPER IS NOT A RECRUIT (Arn, 6 Nov 2026, BiS Guild's RECRUITS: "there are not suppose to be any people on
+    -- here"): every whisper made a "new" row and the whole guild heard it. An untouched row stays on MY desk; the
+    -- guild hears once somebody works it (contacted, invited, trial...).
+    if (entry.status or "new") == "new" then return false end
     -- my own copy first, so the officer who is also the recruiter sees it at once
     T.Took(T.Me(), entry.name, entry.status, entry.class, entry.level, T.Me(), entry.timestamp or time(), entry.note)
-    -- a guildmate's row put back to "new" is nobody's news (T.Took refused my own copy too)
-    if (entry.status or "new") == "new" and NS.Responders:IsGuildMember(entry.name) then return false end
     local lib = Lib()
     if not (lib and lib.SendTo and IsInGuild and IsInGuild()) then return false end
     return lib:SendTo("GUILD", T.MOD, "REC", clean(entry.name, 48), entry.status or "new", entry.class or "",
@@ -101,10 +103,12 @@ function T.Took(sender, name, status, class, level, by, at, note)
     local key = U.StripRealm(name)
     local L = T.List()
     local old = L[key]
-    -- GUILDMATES ARE NOT RECRUITS (5 Nov 2026): older copies in the guild still send "new" about anybody who
-    -- whispered them. Refused, and a "new" row already here about them goes. A worked row (contacted, trial...)
-    -- is still heard: somebody is talking to them on purpose.
-    if (status or "new") == "new" and NS.Responders:IsGuildMember(key) then
+    -- MY OWN CHARACTERS are nobody's recruit (another character on this account whispered me)
+    if NS.Responders.IsMine and NS.Responders:IsMine(key) then return nil end
+    -- "NEW" IS NOBODY'S NEWS (5 Nov guildmates, 6 Nov everyone): older copies in the guild still send "new" about
+    -- anybody who whispered them. Refused, and a "new" row already here about them goes. A worked row (contacted,
+    -- trial...) is still heard: somebody is talking to them on purpose.
+    if (status or "new") == "new" then
         if old and old.status == "new" then
             L[key] = nil
             if NS.UI and NS.UI.OnTeamChanged then NS.UI:OnTeamChanged() end
@@ -138,7 +142,10 @@ function T.Tidy(now)
     now = now or time()
     local L, gone = T.List(), 0
     for k, row in pairs(L) do
-        if now - (row.at or 0) > T.KEEP_DAYS * 86400 then L[k] = nil gone = gone + 1 end
+        -- too old, or a "new" row an older copy shared before 6 Nov (nobody ever worked it)
+        if type(row) ~= "table" or now - (row.at or 0) > T.KEEP_DAYS * 86400 or (row.status or "new") == "new" then
+            L[k] = nil gone = gone + 1
+        end
     end
     return gone
 end
@@ -216,7 +223,10 @@ function T.OnAsk(sender, what)
             end
         end)
     elseif what == "R" and T.IsOfficer(sender) then
-        local list = NS.Responders:SortedList("all")
+        local list = {}
+        for _, e in ipairs(NS.Responders:SortedList("all")) do               -- worked rows only: "new" is mine alone
+            if (e.status or "new") ~= "new" then list[#list + 1] = e end
+        end
         for i = 1, math.min(#list, T.ANSWER_MAX) do
             local e = list[i]
             lib:SendTo("GUILD", T.MOD, "REC", clean(e.name, 48), e.status or "new", e.class or "",

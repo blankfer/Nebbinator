@@ -1914,7 +1914,7 @@ end)()
     NS.db.stats = { posts = {} }
     local heardTeam
     A.RegisterCallback("suite", "Nebbinator_TeamChanged", function(_, name) heardTeam = name end)
-    NS.Team.Took("Grunt", "Newbie", "new", "", "", "Grunt", tostring(now), "")
+    NS.Team.Took("Grunt", "Newbie", "contacted", "", "", "Grunt", tostring(now), "")   -- "new" is refused (6 Nov)
     H.eq(heardTeam, "Newbie", "(api) TeamChanged fires with the name")
     A.UnregisterCallback("suite", "Nebbinator_TeamChanged")
     H.ok(A.Open("Team") and UI:ShownTab() == "Team", "(api) Open(\"Team\")")
@@ -1970,8 +1970,39 @@ end)()
     H.eq(#heard, 0, "and no NewRecruit callback")
     R:OnWhisper("recruiting?", FRESH .. "-Dreamscythe")
     H.ok(NS.db.responders[FRESH] and NS.db.responders[FRESH].status == "new", "a stranger's whisper still lands on the desk")
-    H.ok(recAbout(FRESH), "and the guild still hears about them")
+    -- A WHISPER IS NOT A RECRUIT (Arn, 6 Nov, BiS Guild's RECRUITS: "there are not suppose to be any people on here"):
+    -- an untouched "new" row stays on MY desk; the guild hears once somebody works it
+    H.eq(recAbout(FRESH), nil, "but the guild hears nothing about a stranger who only whispered")
+    H.eq(T.List()[FRESH], nil, "and they are not on the guild's list")
     H.ok(saidAbout(FRESH) and #H.sounds == sounds + 1 and heard[1] == FRESH, "with the line, the sound and the callback")
+
+    H.section("a whisper is not a recruit: worked rows still go to the guild")
+    fresh()
+    R:OnWhisper("recruiting?", FRESH .. "-Dreamscythe")
+    R:SetStatus(FRESH, "contacted")
+    H.ok(recAbout(FRESH) and T.List()[FRESH] and T.List()[FRESH].status == "contacted",
+         "worked (contacted): now the guild hears, and lists them")
+    fresh()
+    NS.db.responders["Only Whispered"] = { name = "Only Whispered", status = "new", timestamp = now, messages = {} }
+    NS.db.responders["Worked One"] = { name = "Worked One", status = "invited", timestamp = now, messages = {} }
+    T.OnAsk(CHAIN, "R")
+    H.eq(recAbout("Only Whispered"), nil, "an officer's ASK: the untouched rows are left out of the answer")
+    H.ok(recAbout("Worked One"), "...the worked ones are sent")
+    NS.db.team["Old New"] = { name = "Old New", status = "new", by = "Grunt", at = now }
+    NS.db.team["Old Trial"] = { name = "Old Trial", status = "trial", by = "Grunt", at = now }
+    T.Tidy(now)
+    H.eq(NS.db.team["Old New"], nil, "the tidy at login clears \"new\" rows older copies left on the guild's list")
+    H.ok(NS.db.team["Old Trial"], "...and keeps the worked ones")
+
+    H.section("a whisper is not a recruit: my own characters")
+    fresh()
+    NS.db.mine = { ["My Alt"] = now }
+    R:OnWhisper("test from my alt", "My Alt-Dreamscythe")
+    H.eq(NS.db.responders["My Alt"], nil, "a whisper from another character on this account makes no desk row")
+    H.eq(T.Took("Grunt", "My Alt", "contacted", "", "", "Grunt", tostring(now), ""), nil, "and a REC about them is refused")
+    NS.db.mine = nil
+    R:RememberMe()
+    H.ok(NS.db.mine and NS.db.mine[NS.Util.WholeName("player")], "logging in writes this character down for the account")
 
     H.section("guildmates are not recruits: the lead finder")
     fresh()
@@ -1990,7 +2021,8 @@ end)()
     H.eq(T.List()[CHAIN], nil, "one more about a guildmate already listed as new takes the row off")
     T.Took("Grunt", LASH, "contacted", "", "", "Grunt", tostring(now), "")
     H.ok(T.List()[LASH] and T.List()[LASH].status == "contacted", "somebody working a guildmate (contacted) is still heard")
-    H.ok(T.Took("Grunt", FRESH, "new", "", "", "Grunt", tostring(now), "") and T.List()[FRESH], "a stranger's REC \"new\" is taken")
+    H.eq(T.Took("Grunt", FRESH, "new", "", "", "Grunt", tostring(now), ""), nil, "a stranger's REC \"new\" is refused too (older copies send every whisper)")
+    H.eq(T.List()[FRESH], nil, "and lands nowhere")
 
     H.section("guildmates are not recruits: rows already saved")
     fresh()
@@ -2004,7 +2036,8 @@ end)()
     local names = {}
     for _, r in ipairs(team) do names[r.name] = r.status end
     H.ok(names[CHAIN] == nil and NS.db.team[CHAIN] == nil, "(api) Team: a saved \"new\" guildmate is swept off the guild's list")
-    H.ok(names[LASH] == "trial" and names[FRESH] == "new", "(api) ...a worked guildmate (trial) and a stranger stay")
+    H.ok(names[LASH] == "trial", "(api) ...a worked guildmate (trial) stays")
+    H.ok(names[FRESH] == nil and NS.db.team[FRESH] == nil, "(api) ...and a saved \"new\" stranger goes too: nobody worked them")
     local recruits = A.Recruits()
     names = {}
     for _, r in ipairs(recruits) do names[r.name] = r.status end
