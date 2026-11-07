@@ -4,7 +4,7 @@
 ## IconTexture: Interface\TargetingFrame\UI-RaidTargetingIcon_1
 ## Notes: Guild recruitment for the whole guild: the ad, the desk, the guild's shared list of recruits and the party scout.
 ## Author: Arn
-## Version: 4.1.1
+## Version: 5.0.0
 ## OptionalDeps: BiSTheme
 ## SavedVariables: NebbinatorDB
 ## DefaultState: enabled
@@ -12,6 +12,7 @@
 Libs\BiSTheme\Console.lua
 Libs\BiSTheme\Options.lua
 Libs\BiSTheme\Minimap.lua
+Libs\BiSTheme\Settings.lua
 Libs\LibBiSComm-1.0\LibBiSComm-1.0.lua
 
 Core\Util.lua

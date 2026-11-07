@@ -28,7 +28,7 @@ Launch night. Trade chat scrolls faster than anyone can read, forty people want 
 
 - **The guild's list.** Every recruit anyone in the guild is talking to is shared with the guild. Officers see who, how far along, who is talking to them, and the note. Everyone else sees only who is a recruit and who is on it. Nobody ever sees what a recruit whispered.
 - **Officers set what the guild needs.** Set the classes and specs on Recruit, press **Send to the guild** on Team, and every Nebbinator in the guild takes them. Everyone's ad follows.
-- **The party scout.** Group with someone of a class you need who isn't in the guild, and a card says ask them. Big, with a sound, when they have no guild; small and quiet when they have one. If someone in the guild is already talking to them, the card says who, and when: nudge them to join.
+- **The party scout** (switch it on in the options). Group with someone of a class you need who isn't in the guild, and a card says ask them. Big, with a sound, when they have no guild; small and quiet when they have one. If someone in the guild is already talking to them, the card says who, and when: nudge them to join.
 - **Your alts stay apart.** Every guild has its own needs, desk and list. An alt in another guild never sees your main's.
 
 ## What works
@@ -62,6 +62,8 @@ Neither is needed. Nebbinator works alone.
 ## Good to know
 
 - **Nothing ever posts on a timer.** An ad goes out when you click its button, and never otherwise.
-- **The minimap button**, a gold star, brightens while someone new is waiting. Left click opens the window, right click a menu.
+- **Starts quiet.** A new install runs the desk and nothing else: the alert sound, the party scout and the post reminder wait until you switch them on.
+- **The minimap button**, a gold star, brightens while someone new is waiting. Left click opens the window, right click the options.
+- **Options in the game's own menu:** Esc > Options > AddOns > BiS> > BiS> Nebbinator.
 - Part of the BiS family. It talks to the other BiS addons over one shared channel; `/biscomm off` silences it.
 - Made for WoW Forever.
