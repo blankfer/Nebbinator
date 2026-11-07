@@ -1,8 +1,11 @@
 # Nebbinator
 
-## Unreleased
+## 4.1.0
 
 - **Clearer windows.** In the options window (and the minimap menu) every button, box and row lights up under the mouse, the window is 20% bigger, and the bottom strip shows which version you are on until you hover a setting.
+- **Short commands.** Every `/bisn` word longer than four letters has a short one too: `/bisn opt` (options), `/bisn test` (preview), `/bisn rep` (auto-reply), `/bisn sct` (scout), `/bisn chan` (channels), `/bisn disc` (Discord link), `/bisn mini` (minimap button), `/bisn rst` (reset the window). The long words still work, and `/bisn help` shows the short word beside each one.
+- **The main window lights up under the mouse too.** Buttons, the header's x and o, the tabs down the left, check boxes, the choice pills, "Write my own" and every line on the desk now glow clearly with a purple wash and edge or bar, and their words go full bright - before, some only changed colour a little and some did nothing.
+- **Which version you have, at a glance.** The bottom of the tab rail shows the version faintly (and on a test copy, which build it is).
 
 ## 4.0.4
 

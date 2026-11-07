@@ -151,6 +151,7 @@ function UI:BuildRecruit(page)
     local obEdge = K.border(obFrame, "edge")
     local obText = K.fs(overrideBox, "Write my own", 11, "ink2")
     obText:SetPoint("LEFT", obFrame, "RIGHT", 6, 0)
+    K.RowHover(overrideBox)
 
     local syncOverride = function()
         if NS.db.customEnabled then
@@ -174,14 +175,17 @@ function UI:BuildRecruit(page)
 
     overrideBox:SetScript("OnClick", function() setOverride(not NS.db.customEnabled) end)
     overrideBox:SetScript("OnEnter", function(s)
+        s:Lit(true)
         obEdge:set("accent", 1)
+        obText:SetTextColor(K.shade("ink"))
         if not GameTooltip then return end
         GameTooltip:SetOwner(s, "ANCHOR_RIGHT")
         GameTooltip:AddLine("Write my own")
         GameTooltip:AddLine("Ignore the template and send exactly what is in the box. Tokens like {discord} still work.", 1, 1, 1, true)
         GameTooltip:Show()
     end)
-    overrideBox:SetScript("OnLeave", function()
+    overrideBox:SetScript("OnLeave", function(s)
+        s:Lit(false)
         syncOverride()
         if GameTooltip then GameTooltip:Hide() end
     end)
@@ -189,6 +193,7 @@ function UI:BuildRecruit(page)
     self:Register("override",
         function() return NS.db.customEnabled and true or false end,
         setOverride, syncOverride)
+    self.controls.override.frame = overrideBox     -- the suite hovers it
     syncOverride()
 
     self.previewBox = K.TextArea(page, w, 84, function(text)

@@ -10,6 +10,10 @@ NS.ADDON_NAME    = ADDON
 -- spent v3 announcing itself as 2.0.1.
 NS.VERSION       = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "Version"))
                    or (GetAddOnMetadata and GetAddOnMetadata(ADDON, "Version")) or "dev"
+-- _bisdev/deploy.sh writes "## X-BiS-Build: <branch>@<commit> <MMDD-HHMM>" into the COPY it puts in the game; a
+-- released zip has none, so this is nil there. The window shows it faintly beside the version (UI.VersionMark).
+NS.BUILD         = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "X-BiS-Build"))
+                   or (GetAddOnMetadata and GetAddOnMetadata(ADDON, "X-BiS-Build")) or nil
 NS.DB_VERSION    = 4
 NS.CHAT_LIMIT    = 255
 
@@ -326,20 +330,36 @@ end
 -- Slash commands
 --------------------------------------------------------------------
 
+-- SHORT WORDS (Arn, 6 Nov 2026: "any thing more than 3 or 4 letters cut it down"): every subcommand longer than
+-- 4 letters answers to a word of 4 or fewer too. The long words keep working - a macro or a habit never breaks.
+-- Every word on the left is turned into the one on the right before the command is picked.
+NS.SLASH_WORDS = {
+    show = "", r = "desk", responders = "desk",
+    opt = "config", options = "config", settings = "config",
+    test = "preview", rep = "reply", chan = "channels", disc = "discord",
+    sct = "scout", mini = "minimap", rst = "reset",
+}
+
+--- The command a typed word means ("rep" -> "reply", "Options" -> "config").
+function NS.SlashWord(w)
+    w = tostring(w or ""):lower()
+    return NS.SLASH_WORDS[w] or w
+end
+
 local function HandleSlash(msg)
     local cmd, rest = msg:match("^(%S*)%s*(.-)$")
-    cmd = (cmd or ""):lower()
+    cmd = NS.SlashWord(cmd)
 
-    if cmd == "" or cmd == "show" then
+    if cmd == "" then
         NS.UI:Toggle()
-    elseif cmd == "r" or cmd == "responders" or cmd == "desk" then
+    elseif cmd == "desk" then
         NS.UI:Toggle("Desk")
-    elseif cmd == "config" or cmd == "options" or cmd == "settings" then
+    elseif cmd == "config" then
         NS.UI:ToggleOptions()
     elseif cmd == "book" then
         NS.UI:Open()
         NS.UI:ToggleBook()
-    elseif cmd == "preview" or cmd == "test" then
+    elseif cmd == "preview" then
         NS.TogglePreview()
         NS.Util.Print("Preview mode " .. (NS.db.previewMode
             and NS.T.text("warn", "ON") .. " - nothing is really sent"
@@ -374,17 +394,23 @@ local function HandleSlash(msg)
         NS.ResetWindow()
         NS.Util.Print("window put back in the middle.")
     else
+        -- each long word with its short one beside it, in brackets
+        local function line(cmd, short, what)
+            print("  " .. NS.T.text("accent", "/bisn" .. (cmd ~= "" and (" " .. cmd) or ""))
+                .. (short and NS.T.text("muted", " (" .. short .. ")") or "") .. " - " .. what)
+        end
         NS.Util.Print("commands:")
-        print("  " .. NS.T.text("accent", "/bisn") .. " - open the window")
-        print("  " .. NS.T.text("accent", "/bisn book") .. " - roll the rest of it out")
-        print("  " .. NS.T.text("accent", "/bisn config") .. " - open the options window")
-        print("  " .. NS.T.text("accent", "/bisn preview") .. " - toggle preview (test) mode")
-        print("  " .. NS.T.text("accent", "/bisn reply") .. " - toggle auto-reply")
-        print("  " .. NS.T.text("accent", "/bisn scout") .. " - toggle the party scout's cards")
-        print("  " .. NS.T.text("accent", "/bisn discord <link>") .. " - set the Discord invite")
-        print("  " .. NS.T.text("accent", "/bisn channels <a, b>") .. " - extra channels to post to")
-        print("  " .. NS.T.text("accent", "/bisn minimap") .. " - show or hide the minimap button")
-        print("  " .. NS.T.text("accent", "/bisn reset") .. " - put the window back")
+        line("", nil, "open the window")
+        line("desk", nil, "open it on the desk")
+        line("book", nil, "step between the desk and the last other page")
+        line("config", "opt", "open the options window")
+        line("preview", "test", "toggle preview mode")
+        line("reply", "rep", "toggle auto-reply")
+        line("scout", "sct", "toggle the party scout's cards")
+        line("discord <link>", "disc", "set the Discord invite")
+        line("channels <a, b>", "chan", "extra channels to post to")
+        line("minimap", "mini", "show or hide the minimap button")
+        line("reset", "rst", "put the window back")
     end
 end
 
