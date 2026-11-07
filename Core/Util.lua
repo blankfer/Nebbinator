@@ -255,7 +255,8 @@ end
 function U.WholeName(unit)
     if GetUnitName then
         local ok, n = pcall(GetUnitName, unit, false)
-        if ok and type(n) == "string" and n ~= "" and not U.Hidden(n) then return U.StripRealm(n) end
+        -- hidden FIRST: a secret name refuses `~= ""` (7 Nov sweep - the compare ran before the question)
+        if ok and not U.Hidden(n) and type(n) == "string" and n ~= "" then return U.StripRealm(n) end
     end
     local n = UnitName and UnitName(unit)
     if type(n) ~= "string" or U.Hidden(n) then return nil end

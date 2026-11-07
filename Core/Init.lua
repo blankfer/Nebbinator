@@ -14,7 +14,7 @@ NS.VERSION       = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOn
 -- released zip has none, so this is nil there. The window shows it faintly beside the version (UI.VersionMark).
 NS.BUILD         = (C_AddOns and C_AddOns.GetAddOnMetadata and C_AddOns.GetAddOnMetadata(ADDON, "X-BiS-Build"))
                    or (GetAddOnMetadata and GetAddOnMetadata(ADDON, "X-BiS-Build")) or nil
-NS.DB_VERSION    = 4
+NS.DB_VERSION    = 5               -- 5: Forever 1.0 (7 Nov 2026), a new install starts quiet (LoadDB)
 NS.CHAT_LIMIT    = 255
 
 --------------------------------------------------------------------
@@ -84,7 +84,7 @@ local function Defaults()
             cooldown    = 900,          -- per player, seconds
             maxPerMinute = 6,           -- hard spam brake
             skipGuildies = true,
-            playSound   = true,
+            playSound   = false,        -- Forever 1.0: a new install rings nothing (it was true: every whisper)
             sound       = "bell",       -- deliberately not the ready-check sound
             soundOnlyNew = false,       -- false = ding on every message, not just first contact
             -- 21 Oct 2026, the review:
@@ -114,9 +114,9 @@ local function Defaults()
         filter     = "all",
         hiddenChannels = {},       -- send buttons right-clicked off the desk
         -- 21 Oct 2026, the review:
-        scout      = true,         -- the party scout's cards (Core/Scout.lua)
+        scout      = false,        -- the party scout's cards (Core/Scout.lua); Forever 1.0: off for a new install
         scoutSeen  = {},           -- name -> when a card last asked about them
-        remind     = 15,           -- minutes after a post to remind you, in a city (0 = never)
+        remind     = 0,            -- minutes after a post to remind you, in a city (0 = never); Forever 1.0: 0, was 15
         stats      = { posts = {}, whispers = {} },   -- what works (Core/Stats.lua)
         officerRank = 1,           -- guild ranks 0..this are officers (BiS Guild's rule, the same number)
         team       = {},           -- the guild's list of prospects (Core/Team.lua)
@@ -126,6 +126,25 @@ end
 
 NS.Defaults = Defaults          -- Core/Fence.lua fills a new guild's book from these
 
+--- FOREVER 1.0 (Arn, 7 Nov 2026): "every new user ... every module turned off" but "everybody that already has the
+--- addons installed, I don't wanna change default settings that they have on". The three extras above went quiet
+--- in Defaults(); a save from before (dbVersion < 5) that never wrote one of them read it as 4.x's default - so
+--- that value is written into it, ONCE, before the new defaults fill anything in. Its own choices are untouched.
+NS.FROZEN_V4 = { scout = true, remind = 15, autoReply = { playSound = true } }
+
+local function FreezeV4(saved)
+    for k, v in pairs(NS.FROZEN_V4) do
+        if type(v) == "table" then
+            if type(saved[k]) ~= "table" then saved[k] = {} end
+            for k2, v2 in pairs(v) do
+                if saved[k][k2] == nil then saved[k][k2] = v2 end
+            end
+        elseif saved[k] == nil then
+            saved[k] = v
+        end
+    end
+end
+
 --------------------------------------------------------------------
 -- Boot
 --------------------------------------------------------------------
@@ -134,10 +153,13 @@ function NS:LoadDB()
     -- FOREVER ONLY (Arn, 21 Oct 2026: "this is a forever addon no more tbc support"). Forever keeps its
     -- own WTF folder, so nothing from the TBC 1.x/2.x days (NubbinatorDB) can be on this client: the old
     -- migration went. A beta save from 3.x fills in whatever is new.
+    -- A NEW INSTALL is decided HERE, on the table as the game handed it, before anything is merged into it:
+    -- none (or empty) = new = the quiet Defaults(), stamped 5 so the freeze below never runs on it.
     local saved = _G.NebbinatorDB
     if type(saved) ~= "table" or next(saved) == nil then
         saved = Defaults()
     else
+        if (tonumber(saved.dbVersion) or 0) < 5 then FreezeV4(saved) end   -- once: the stamp below is 5
         saved = NS.Util.ApplyDefaults(saved, Defaults())
         saved.windows = nil
         -- the old fixed logs address becomes the one that reads your realm and region
@@ -321,7 +343,8 @@ function NS:Initialize()
     NS.Comm.Boot()
     if NS.Team then NS.Team.Boot() end      -- the guild's desk and needs (Core/Team.lua)
     NS.UI:Initialize()
-    NS.Minimap:Initialize()
+    NS.UI:RegisterSettingsPage()            -- BiS> Nebbinator in the game's options (UI/Options.lua)
+    NS.Minimap:Initialize()                 -- after it: the right click opens that page
 
     NS.Say("ready", "good")
 end

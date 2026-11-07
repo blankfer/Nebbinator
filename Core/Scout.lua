@@ -8,7 +8,8 @@
 -- not in our guild and plays a class the guild needs gets a card (UI/Cards.lua): BIG with a sound when they
 -- have no guild, small and quiet when they have one. Once per person per S.AGAIN days. Their class is plain
 -- to an addon; their ROLE only when the game assigned one (the group finder), which narrows the specs.
--- Everyone in the guild gets the cards (Arn's pick); `/bisn scout` turns them off.
+-- Everyone in the guild gets the cards (Arn's pick); `/bisn scout` turns them off. Forever 1.0 (7 Nov 2026): a NEW
+-- install starts with the scout off (cards and a sound are extras); a save from before keeps what it had.
 
 local ADDON, NS = ...
 local U = NS.Util
@@ -43,8 +44,21 @@ end
 
 --- One groupmate: the card's words, or nil and why not (the suite asks this directly).
 function S.Look(unit)
-    if not (UnitExists and UnitExists(unit)) or (UnitIsUnit and UnitIsUnit(unit, "player")) then return nil, "nobody" end
-    if UnitIsPlayer and not UnitIsPlayer(unit) then return nil, "not a player" end
+    -- every answer about the unit asked hidden-or-not FIRST: a secret boolean refuses to be tested for truth
+    -- (7 Nov sweep). Hidden = no card - the quiet answer.
+    local exists = UnitExists and UnitExists(unit)
+    if U.Hidden(exists) then return nil, "hidden" end
+    if not exists then return nil, "nobody" end
+    if UnitIsUnit then
+        local me = UnitIsUnit(unit, "player")
+        if U.Hidden(me) then return nil, "hidden" end
+        if me then return nil, "nobody" end
+    end
+    if UnitIsPlayer then
+        local isPlayer = UnitIsPlayer(unit)
+        if U.Hidden(isPlayer) then return nil, "hidden" end
+        if not isPlayer then return nil, "not a player" end
+    end
     local name = U.WholeName(unit)               -- the whole "Name Surname": the desk, roster and list use it
     if type(name) ~= "string" or name == "" then return nil, "no name" end
     if (UnitIsInMyGuild and plain(UnitIsInMyGuild(unit))) or NS.Responders:IsGuildMember(name) then return nil, "ours already" end
