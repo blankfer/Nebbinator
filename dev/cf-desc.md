@@ -1,10 +1,16 @@
-# Nebbinator — CurseForge page text (4.0.0)
+# Nebbinator — CurseForge page text (5.0.0)
 
 Paste everything below the line into the project description
 (CurseForge → BiS>Nebbinator, project 1683356 → Edit → Description), in the Markdown editor.
 
 Written 21 Oct 2026 for 4.0.0, the Forever rebuild. The page it replaces still described 3.0 on TBC.
 In the house voice (`_bisdev/docs/voice.md`): the opener talks; lists and tables stay flat.
+
+Changed since the previous text (8 Nov, 5.0.0 - Forever 1.0): "Good to know" now says the game's
+options page (Esc > Options > AddOns > BiS> > BiS> Nebbinator) is a full-page dashboard, sections down
+the left and each one's settings big on the right; the minimap's right click is the options window and a
+second right click closes it; a new install starts quiet and anyone already using it keeps their settings.
+The 4.1.x additions (short commands, hover glow, `/biscomm ver`) stay in the changelog.
 
 ---
 
@@ -62,8 +68,8 @@ Neither is needed. Nebbinator works alone.
 ## Good to know
 
 - **Nothing ever posts on a timer.** An ad goes out when you click its button, and never otherwise.
-- **Starts quiet.** A new install runs the desk and nothing else: the alert sound, the party scout and the post reminder wait until you switch them on.
-- **The minimap button**, a gold star, brightens while someone new is waiting. Left click opens the window, right click the options.
-- **Options in the game's own menu:** Esc > Options > AddOns > BiS> > BiS> Nebbinator.
+- **Starts quiet.** A new install runs the desk and your ad, and nothing else: the alert sound, the party scout and the post reminder wait until you switch them on. Already using Nebbinator? You keep your settings, exactly as you had them.
+- **The minimap button**, a gold star, brightens while someone new is waiting. Left click opens the window, right click the options window (right click again closes it).
+- **Options in the game's own menu:** Esc > Options > AddOns > **BiS>** > BiS> Nebbinator is a full-page dashboard. The sections run down the left (the desk, posting, auto-reply, the bell, party scout, lead finder, the guild, the channel), and each one's settings sit big on the right. The desk, posting, auto-reply and the guild each have a button to their page in the window.
 - Part of the BiS family. It talks to the other BiS addons over one shared channel; `/biscomm off` silences it.
 - Made for WoW Forever.
