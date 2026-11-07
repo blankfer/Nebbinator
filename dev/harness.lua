@@ -217,6 +217,14 @@ local function newFrame(ftype, name, parent)
     function fr:SetEnabled(v) self._enabled = v and true or false end
     function fr:IsEnabled() return self._enabled end
     function fr:EnableMouse(v) self._mouse = v end
+    -- re-parent and scale the way the client does: SetParent really moves the frame (GetParent answers the new
+    -- one), a frame's own scale starts at 1 and keeps what it was given - so "the page left the window alone" can fail
+    function fr:SetParent(p) self._parent = p end
+    function fr:SetScale(s)
+        if not isnum(s) or s <= 0 then error("SetScale needs a number above 0", 0) end
+        self._scale = s
+    end
+    function fr:GetScale() return self._scale or 1 end
     function fr:SetVerticalScroll(v) self._scroll = v end
     function fr:GetVerticalScroll() return self._scroll or 0 end
     function fr:SetScrollChild(c) self._child = c end

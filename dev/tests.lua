@@ -1874,7 +1874,7 @@ end)()
     b:Click("LeftButton")
     H.ok(not UI.frame:IsShown(), "and closes it")
     -- FOREVER 1.0, ONE STANDARD (Arn, 7 Nov: "we gotta get everything on the same page"): left = the window,
-    -- right = the options. No game options panel in this run, so the right click falls back to our own window.
+    -- right = the options: our own options window, a toggle (kit Minimap minor 5), with or without a game panel.
     H.ok(BiSTheme.settingsPages and BiSTheme.settingsPages.Nebbinator, "the BiS> page was asked for at login")
     b:Click("RightButton")
     H.ok(UI.opt and UI.opt:IsShown(), "right click opens the options (no game panel here: our own window)")
@@ -2423,12 +2423,39 @@ end)()
         spec.open.func()
         H.ok(UI.frame:IsShown() and UI:ShownTab() == "Desk", "(page) it opens the window on the desk")
         UI:Hide()
-        -- the minimap's right click opens the page now there is one
+        -- SHOWING THE PAGE (kit Settings minor 2, Arn 7 Nov: "dont just shrink remake them all"): the options window
+        -- is never squeezed inside it - its parent and scale stay, it stays hidden, a button opens it as it always was
+        local win = UI:BuildOptions()
+        UI:ToggleOptions(false)
+        local parentWas, scaleWas = win:GetParent(), win:GetScale()
+        page.frame:Show()
+        page.frame:Fire("OnShow")
+        H.eq(win:GetParent(), parentWas, "(page) showing it leaves the options window's parent alone")
+        H.eq(win:GetScale(), scaleWas, "(page) and its scale")
+        H.eq(win:IsShown(), false, "(page) and leaves it hidden")
+        local fb = page.frame.body
+        H.ok(page.frame.state and page.frame.state:IsShown()
+             and page.frame.state:GetText() == UI:SettingsStatus(), "(page) it shows the status line")
+        H.ok(page.frame.optBtn and page.frame.optBtn:IsShown(), "(page) and a button: the options window")
+        H.ok(page.frame.optBtn and page.frame.optBtn:GetParent() == fb, "(page) the button sits in the page's body")
+        if page.frame.optBtn then page.frame.optBtn:Click() end
+        H.eq(win:IsShown(), true, "(page) its click shows the options window")
+        H.eq(win:GetParent(), parentWas, "(page) where it always was")
+        page.frame:Hide()
+        page.frame:Fire("OnHide")
+        H.eq(win:IsShown(), true, "(page) leaving the page does not take it back")
+        UI:ToggleOptions(false)
+        -- THE MINIMAP'S RIGHT CLICK (kit Minimap minor 5, Arn 7 Nov: "when i right click the minimap again it should
+        -- close that option window ... we keep them opening how they used to"): the own window, a toggle, never the
+        -- game's options - even now there is a page there
         local b = MB.button
-        local optWas = UI.opt:IsShown()
+        local openedWas = #opened
         b:Click("RightButton")
-        H.eq(opened[#opened], "BiS> Nebbinator", "(page) the minimap's right click opens it")
-        H.eq(UI.opt:IsShown(), optWas, "(page) and does not also toggle the loose options window")
+        H.eq(UI.opt:IsShown(), true, "(minimap) right-click shows the options window")
+        H.eq(UI.opt:GetParent(), parentWas, "(minimap) on its own, not inside a page")
+        b:Click("RightButton")
+        H.eq(UI.opt:IsShown(), false, "(minimap) a second right-click hides it")
+        H.eq(#opened, openedWas, "(minimap) the game's OpenToCategory is never called by the right-click")
         _G.Settings = nil
         T.settingsRoot = keepRoot
         T.settingsPages.Nebbinator.category, T.settingsPages.Nebbinator.frame = nil, nil

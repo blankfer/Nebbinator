@@ -4,8 +4,8 @@
 -- dragging. The star is full bright while somebody new waits, quiet otherwise.
 --
 -- ONE STANDARD (Forever 1.0, Arn, 7 Nov 2026: "sometimes left click does one thing, sometimes right click does
--- another ... we gotta get everything on the same page"): LEFT = the window, RIGHT = the options - the BiS>
--- Nebbinator page in the game's options when there is one, else the options window itself. The old right-click
+-- another ... we gotta get everything on the same page"): LEFT = the window, RIGHT = the options window itself, a
+-- toggle (kit minor 5, Arn 7 Nov live: "we keep them opening how they used to") - never the game's options. The old right-click
 -- menu is gone: its pages are the window's tabs, its three switches (auto-reply, party scout, preview) are rows
 -- in the options. The lib draws the tooltip: "left-click  the window", "right-click  options", "drag  move".
 

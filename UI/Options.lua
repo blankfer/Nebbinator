@@ -142,9 +142,9 @@ function UI:SettingsStatus()
 end
 
 --- FOREVER 1.0 (Arn, 7 Nov 2026: "they'll just see BiS> ... click into that add-on"): Nebbinator's page under the
---- one BiS> entry in the game's options (Libs\BiSTheme\Settings.lua). It holds this options window. Asked once
---- at login; without the game's panel the shared kit answers nil and the minimap's right click opens the window
---- on its own.
+--- one BiS> entry in the game's options (Libs\BiSTheme\Settings.lua minor 2). It names this options window and
+--- shows a button to it - never squeezes it inside the page. Asked once at login; without the game's panel the
+--- shared kit answers nil. The minimap's right click opens the window itself either way (a toggle).
 function UI:RegisterSettingsPage()
     if not (BiSTheme and BiSTheme.SettingsPage) then return nil end
     return BiSTheme.SettingsPage("Nebbinator", {
