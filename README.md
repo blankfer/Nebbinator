@@ -24,8 +24,8 @@ a desk again. It remembers which way you left it.
 | **Settings** | sounds, cooldown, minimap, logs address, lead finder |
 | **About** | how it works, and every command |
 
-Minimap button: left click opens the desk, right click opens the book. It grows
-a violet ring when somebody is waiting.
+Minimap button: left click opens the window, right click the options (the BiS>
+Nebbinator page in Esc > Options > AddOns). The star brightens when somebody is waiting.
 
 ## The send buttons pin
 

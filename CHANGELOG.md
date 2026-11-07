@@ -1,5 +1,13 @@
 # Nebbinator
 
+## 5.0.0 - Forever 1.0
+
+- **A new install starts quiet.** The desk works from the first whisper - everybody outside the guild who whispers you lands on it, and the ad and the send bar are ready - but nothing rings and nothing pops up until you ask for it: the alert sound, the party scout's cards and the "time to post again" reminder start off (the auto-reply and the lead finder already did). Turn any of them on in the options.
+- **Already using Nebbinator? Nothing changes for you.** Your sound, scout and reminder stay exactly as you had them.
+- **Options live in the game's own menu too.** Esc > Options > AddOns > **BiS>** lists every BiS addon you have; **BiS> Nebbinator** holds the same options as the options window, says what is on, and has a button to the desk.
+- **The minimap button works like every other BiS button.** Left click opens the window, right click opens the options. The old right-click menu is gone: its pages are the window's tabs, and its auto-reply, party scout and preview switches are in the options.
+- **Fixes:** a groupmate the game hides from addons in an instance no longer risks an error in the party scout - they simply get no card; and a hidden name is checked before anything else looks at it.
+
 ## 4.1.1
 
 - **Which BiS versions your guild runs:** `/biscomm ver` lists every BiS addon around you, who has the newest, and which release is marked critical. Nothing is said unless an update is critical (or your copy is too old to talk to a guildmate's) - then one line, once, never in a fight.
