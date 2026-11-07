@@ -12,6 +12,7 @@ function R:Initialize()
     self.whoBusy      = false
     self.replyLog     = {}     -- timestamps of auto-replies, for the rate cap
     self.guildRoster  = {}
+    self:RememberMe()
 
     local f = CreateFrame("Frame")
     self.frame = f
@@ -68,6 +69,23 @@ end
 local function Share(entry) if NS.Team and NS.Team.Changed then NS.Team.Changed(entry) end end
 R.Share = Share
 
+--- The characters of this account: NebbinatorDB is the ACCOUNT's, and `mine` is not one of the guild's keys
+--- (Fence.KEYS), so every character writes itself down at login and all of them see the list.
+function R:RememberMe()
+    if not NS.db then return nil end
+    local me = U.WholeName("player")
+    if not me then return nil end
+    NS.db.mine = type(NS.db.mine) == "table" and NS.db.mine or {}
+    NS.db.mine[me] = time()
+    return me
+end
+
+function R:IsMine(name)
+    local mine = NS.db and NS.db.mine
+    if type(mine) ~= "table" or type(name) ~= "string" then return false end
+    return mine[U.StripRealm(name)] ~= nil
+end
+
 function R:IsGuildMember(name)
     if type(name) ~= "string" or name == "" then return false end
     -- dirty, or never read (a fence swap drops guildRanks: the last guild's roster is not this one's)
@@ -98,7 +116,8 @@ function R:SweepGuildmates()
     if T and T.List then
         local L = T.List()
         for key, row in pairs(L) do
-            if type(row) == "table" and row.status == "new" and self:IsGuildMember(row.name or key) then
+            -- "new" on the guild's list is nobody's news (6 Nov): a guildmate's or anybody's
+            if type(row) == "table" and (row.status or "new") == "new" then
                 L[key] = nil
                 gone = gone + 1
             end
@@ -139,6 +158,8 @@ function R:OnWhisper(text, sender, _, _, _, _, _, _, _, _, _, guid)
     -- never auto-replied to - guildless, or before the roster arrives, the guild check cannot catch it
     if not R.me then R.me = U.WholeName("player") end
     if sender == R.me then return end
+    -- ANOTHER CHARACTER OF MINE (this account, written down at each login) is not a recruit either
+    if self:IsMine(sender) then return end
 
     local db = NS.db.responders
     local entry = db[sender]
