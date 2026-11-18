@@ -1,5 +1,10 @@
 # Nebbinator
 
+## 5.0.1
+
+- **Fixed: a gamepad could get "action blocked" with BiS addons running.** The shared BiS messaging library no longer switches a game event on or off from a timer.
+- **Ride clocks know Forever's Tanaris - Riverglades boat.**
+
 ## 5.0.0 - Forever 1.0
 
 - **A new install starts quiet.** The desk works from the first whisper - everybody outside the guild who whispers you lands on it, and the ad and the send bar are ready - but nothing rings and nothing pops up until you ask for it: the alert sound, the party scout's cards and the "time to post again" reminder start off (the auto-reply and the lead finder already did). Turn any of them on in the options.
