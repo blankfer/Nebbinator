@@ -102,7 +102,8 @@ function UI:BuildDesk(page)
 
     self.logsBox = K.Input(desk, 210, 18, {
         maxLetters = 255, size = 10,
-        onChange = function(text) NS.db.logsUrl = text end,
+        -- the served row's Logs button greys or lights as the address can or cannot be built
+        onChange = function(text) NS.db.logsUrl = text UI:PaintServed(UI:ServedName()) end,
     })
     self.logsLabel = K.fs(desk, "Logs", 10, "muted")
 
@@ -425,6 +426,10 @@ function UI:PaintServed(name)
     end)
     s.who:SetScript("OnClick", function() NS.Responders:LookupPlayer(name) end)
     s.logs:SetScript("OnClick", function() NS.Responders:ShowLogs(name) end)
+    -- no address to build (no realm since 21 Nov 2026, or no address at all): grey, and the tip says why
+    local url, why = NS.Responders:LogsUrl(name)
+    s.logs:SetEnabledFlat(url ~= "")
+    s.logs:SetTip("Logs", url ~= "" and "Builds the logs address and pops it up ready to copy." or why)
 
     local width = (self.desk:GetWidth() or self.DESK_W) - 20
     local slot = math.floor((width - 9) / 4)

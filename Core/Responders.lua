@@ -515,12 +515,22 @@ function R:SortedList(filter)
     return list
 end
 
+-- NO REALM (Forever 1.60.1 Live Update 2, 21 Nov 2026, permanent): GetRealmName answers "". An address with
+-- {realm} in it would come out ".../character/us//name" - a broken link - so it is not built at all; the Logs
+-- button greys out and says this.
+R.NO_REALM = "Forever no longer tells addons your realm, so {realm} in the logs address cannot be filled in. "
+    .. "Write your realm into the Logs box on the desk in its place, as Warcraft Logs spells it (living-flame)."
+
+--- The logs address for a responder, or "" and why not.
 function R:LogsUrl(name)
     local url = U.Trim(NS.db.logsUrl)
-    if url == "" then return "" end
+    if url == "" then return "", "no logs address set" end
     -- the realm as Warcraft Logs writes it ("living-flame"), the region from the client (21 Oct 2026: it
     -- said "us" whoever you were)
-    local realm = (GetRealmName() or ""):gsub("'", ""):gsub("%s+", "-"):lower()
+    local raw = GetRealmName and GetRealmName()
+    if U.Hidden(raw) or type(raw) ~= "string" then raw = "" end
+    local realm = raw:gsub("'", ""):gsub("%s+", "-"):lower()
+    if realm == "" and url:lower():find("{realm}", 1, true) then return "", R.NO_REALM end
     return (url:gsub("{(%w+)}", function(token)
         token = token:lower()
         if token == "name"   then return (U.StripRealm(name):gsub("%s+", "-"):lower()) end
@@ -531,9 +541,9 @@ function R:LogsUrl(name)
 end
 
 function R:ShowLogs(name)
-    local url = self:LogsUrl(name)
+    local url, why = self:LogsUrl(name)
     if url == "" then
-        NS.Say("no logs address set", "warn")
+        NS.Say(why or "no logs address set", "warn")
         return
     end
     NS.Kit.ShowCopyBox(url, "Logs for " .. name)

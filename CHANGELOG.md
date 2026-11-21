@@ -1,5 +1,11 @@
 # Nebbinator
 
+## 5.0.2
+
+- **Fixed: your guild's desk, needs, raid times and Discord came back empty after Forever's 21 Nov update.** The game stopped telling addons which realm you are on, so Nebbinator thought you were in a new guild and opened an empty book. Your guild's book is now kept under the guild's name alone, and the first time you log in, everything from before comes back by itself: every whisper on the desk (including the ones that came in since), the guild's list of prospects, the needs, raid times, Discord and your own words. If you typed something new since the update, that is kept. Older copies are tucked away in your saved file, never deleted.
+- **The Logs button no longer builds a broken link.** Forever no longer says your realm, so an address with `{realm}` in it greys the button out and tells you why: write your realm into the Logs box on the desk instead (for example `https://fresh.warcraftlogs.com/character/{region}/your-realm/{name}`).
+- `{realm}` in an ad is empty now; a dash or brackets left around it are tidied away, and it is no longer in the token list.
+
 ## 5.0.1
 
 - **Fixed: a gamepad could get "action blocked" with BiS addons running.** The shared BiS messaging library no longer switches a game event on or off from a timer.

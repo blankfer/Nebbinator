@@ -75,7 +75,11 @@ through the same function, so the window and the commands can never disagree.
 Usable in a template, in the auto-reply, and in any quick reply:
 
     {needs} {needs:short} {times} {times:full} {guild} {discord} {content}
-    {tanks} {healers} {dps} {total} {pre} {post} {player} {level} {realm} {faction}
+    {tanks} {healers} {dps} {total} {pre} {post} {player} {level} {faction}
+
+`{realm}` is empty since Forever stopped telling addons the realm (21 Nov 2026). An
+old template that has it still works: the token vanishes, and a dash or brackets left
+around it are tidied away.
 
 If your ad uses neither `{guild}` nor `{discord}`, the Message tab says so and
 offers a button that adds it — a name that never appears in the ad is the most

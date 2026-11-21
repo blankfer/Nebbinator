@@ -308,8 +308,30 @@ H.eq(NS.db.responders.Kumlance.status, "contacted", "left click moves the status
 UI.served.status:Click("RightButton")
 H.eq(NS.db.responders.Kumlance.status, "new", "right click moves it back")
 
+H.section("logs: no realm (Forever, 21 Nov 2026)")
+-- the default address has {realm} in it and GetRealmName answers "": no ".../us//kumlance" link
+H.eq(NS.db.logsUrl, "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}", "(no realm) the default address")
+local noUrl, noWhy = R:LogsUrl("Kumlance")
+H.eq(noUrl, "", "(no realm) no address is built - never one with an empty realm in it")
+H.eq(noWhy, R.NO_REALM, "(no realm) and it says why")
+H.eq(UI.served.logs.enabled, false, "(no realm) the Logs button is greyed out")
+H.eq(UI.served.logs.tipBody, R.NO_REALM, "(no realm) its tip says why, in plain words")
+H.ok(UI.served.logs.tipBody:find("Logs box", 1, true), "(no realm) and what to do instead")
+UI.served.logs:Click()
+H.ok(not (NS.Kit.copyBox and NS.Kit.copyBox:IsShown()), "(no realm) a click on it opens nothing")
+do
+    local keepSay, said = NS.Say, nil
+    NS.Say = function(text) said = text end
+    R:ShowLogs("Kumlance")
+    NS.Say = keepSay
+    H.eq(said, R.NO_REALM, "(no realm) asked for in code, it says why too")
+end
+
 H.section("logs")
-NS.db.logsUrl = "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}"
+-- the player writes the realm into the Logs box by hand: the button lights at once
+UI.logsBox.edit:Type("https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}")
+H.eq(NS.db.logsUrl, "https://fresh.warcraftlogs.com/character/us/dreamscythe/{name}", "the box writes the address")
+H.eq(UI.served.logs.enabled, true, "an address with no {realm} in it: the Logs button works again")
 UI.served.logs:Click()
 local box = NS.Kit.copyBox
 H.ok(box ~= nil and box:IsShown(), "the copy box opened")
@@ -1355,16 +1377,32 @@ end
     H.ok(#H.sent == before + 1 and H.sent[#H.sent].target == "Kumlance" and #M.queue == 0, "and goes the moment it is allowed")
     _G.C_ChatInfo.InChatMessagingLockdown = nil
 
-    H.section("review: the logs address reads your realm and region")
-    local realRealm, realRegion = _G.GetRealmName, _G.GetCurrentRegion
-    _G.GetRealmName = function() return "Living Flame" end
+    H.section("review: the logs address reads your region (the realm is gone)")
+    -- the realm left the client on 21 Nov 2026 (the mock answers "" like it); the region still comes from it,
+    -- and a realm the player wrote into the address by hand stays as written
+    local realRegion = _G.GetCurrentRegion
     _G.GetCurrentRegion = function() return 3 end
     local keepUrl = NS.db.logsUrl
-    NS.db.logsUrl = "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}"   -- the new default
-    H.eq(R:LogsUrl("Kumlance"), "https://fresh.warcraftlogs.com/character/eu/living-flame/kumlance",
-         "realm and region from the client, as Warcraft Logs writes them")
-    _G.GetRealmName, _G.GetCurrentRegion = realRealm, realRegion
+    NS.db.logsUrl = "https://fresh.warcraftlogs.com/character/{region}/Living-Flame/{name}"
+    H.eq(R:LogsUrl("Kumlance Wildhammer"), "https://fresh.warcraftlogs.com/character/eu/Living-Flame/kumlance-wildhammer",
+         "region from the client, the hand-written realm kept, the whole name as Warcraft Logs writes it")
+    NS.db.logsUrl = "https://fresh.warcraftlogs.com/character/{region}/{REALM}/{name}"
+    H.eq((R:LogsUrl("Kumlance")), "", "{REALM} in capitals is still the realm: not built")
+    _G.GetCurrentRegion = realRegion
     NS.db.logsUrl = keepUrl
+
+    H.section("review: {realm} in an ad leaves nothing dangling")
+    local M2 = NS.Message
+    H.eq(M2:Tokens().realm, "", "(realm) the token is empty, like the client's answer")
+    local txt, empty = M2:Render("<{guild}> - {realm} - raids")
+    H.eq(txt, "<The Heathens> - raids", "(realm) one dash left between two")
+    H.eq(#empty, 0, "(realm) and no 'empty: {realm}' after every post - nobody can fill it")
+    H.eq((M2:Render("{realm} - <{guild}> recruiting")), "<The Heathens> recruiting", "(realm) a dash at the start goes")
+    H.eq((M2:Render("<{guild}> ({realm})")), "<The Heathens>", "(realm) empty brackets go")
+    H.eq((M2:Render("<{guild}> {realm}")), "<The Heathens>", "(realm) a trailing space goes")
+    local offered = false
+    for _, t in ipairs(NS.TOKEN_HELP) do if t == "{realm}" then offered = true end end
+    H.ok(not offered, "(realm) the token list no longer offers {realm}")
 
     H.section("review: joined, declined and invited")
     R:ClearWithStatus(nil)
@@ -1682,7 +1720,7 @@ end)()
 ;(function()
     local F, T, R, Sc = NS.Fence, NS.Team, NS.Responders, NS.Scout
     local now = os.time()
-    local MAIN, ALT = "The Heathens-Dreamscythe", "Alt Guild-Dreamscythe"
+    local MAIN, ALT = "The Heathens", "Alt Guild"     -- the guild's name alone since 21 Nov 2026 (no realm)
 
     H.section("the fence: the book is the guild's")
     H.eq(NS.db.guildKey, MAIN, "after login the live book is the guild this character is in")
@@ -1748,15 +1786,196 @@ end)()
     H.myGuild = nil
     F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
     H.eq(NS.db.guildKey, "-", "left the guild: a book of its own, not the old guild's")
-    H.myGuild, H.myGuildRealm = "The Heathens", "Otherrealm"
+    H.myGuild = "The Heathens"
     F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
-    H.eq(NS.db.guildKey, "The Heathens-Otherrealm", "the same name on another realm is another guild")
-    H.myGuildRealm = nil
-    F.frame:Fire("OnEvent", "PLAYER_GUILD_UPDATE")
-    H.eq(NS.db.guildKey, MAIN, "and home again")
+    H.eq(NS.db.guildKey, MAIN, "and home again: the key is the guild's name, no realm in it")
+    H.ok(NS.db.needs.shaman.resto == 2 and NS.db.responders.Mainrecruit, "the same book as before")
     H.guild = { { name = "Kumlust-Dreamscythe", rank = 4 } }
     R.rosterDirty = true
     NS.db.needs.shaman.resto = 0
+end)()
+
+-- NO REALM (Forever 1.60.1 Live Update 2, 21 Nov 2026): GetRealmName and GetGuildInfo's realm answer "". The
+-- old key "Name-Realm" became "Name-?", Settle parked the real book and opened an empty one. Arn's save that
+-- evening: guildKey "AI Generated-?" (fresh, two new whispers), the real book parked under "AI Generated-CAMWOW
+-- US1 Realm 2 PvP", and an older split under "AI Generated-CAMWOWUS1Realm6PvP". Every test here is a COLD
+-- START: the save as the client hands it, a login, the guild answering late - and no click.
+;(function()
+    local F, T = NS.Fence, NS.Team
+    local now = os.time()
+    local keepDB, keepSaved = NS.db, _G.NebbinatorDB
+    local function needs(t)
+        local n = NS.Defaults().needs
+        for class, specs in pairs(t or {}) do for spec, v in pairs(specs) do n[class][spec] = v end end
+        return n
+    end
+    -- the login: the save handed over, the guild not known yet, then the roster event says which
+    local function Login(save, guild)
+        F.ready = false
+        H.myGuild = guild
+        H.guildLate = guild ~= nil
+        _G.NebbinatorDB = save
+        NS:LoadDB()
+        local early = F.Settle()
+        H.guildLate = nil
+        F.frame:Fire("OnEvent", "GUILD_ROSTER_UPDATE")
+        return early
+    end
+    local function count(t) local n = 0 for _ in pairs(t or {}) do n = n + 1 end return n end
+    local POST = { at = now - 7200, where = "Trade", tpl = "Standard", whispers = 2, chatType = "CHANNEL", target = 2 }
+
+    H.section("no realm: the book the bug parked comes back at login, no click")
+    local R2, R6 = "The Heathens-CAMWOW US1 Realm 2 PvP", "The Heathens-CAMWOWUS1Realm6PvP"
+    local save = {
+        dbVersion = 5, guildKey = "The Heathens-?",
+        -- the live book the bug opened: defaults, and whoever whispered since
+        discord = "", needs = needs(), raidTimes = NS.Defaults().raidTimes, content = "raids", preText = "",
+        postText = "", customEnabled = false, customText = "", guildName = "",
+        responders = {
+            Afterbug = { name = "Afterbug", status = "new", timestamp = now - 60, note = "",
+                         messages = { { at = now - 60, text = "hi, recruiting?" } } },
+            Both = { name = "Both", status = "new", timestamp = now - 30, note = "",
+                     messages = { { at = now - 30, text = "me again" } } },
+        },
+        team = {}, stats = { posts = {}, whispers = {} }, scoutSeen = {},
+        guilds = {
+            [R2] = {   -- the real book, parked by the bug
+                discord = "discord.gg/heathens", needs = needs({ shaman = { resto = 2 } }),
+                needsAt = now - 86400, needsBy = "Officerton", raidTimes = { tuesday = "8pm" },
+                content = "raids", preText = "lf raiders", postText = "SSC/TK", customEnabled = false,
+                customText = "my own words", guildName = "",
+                responders = {
+                    Both = { name = "Both", status = "contacted", note = "good healer", class = "SHAMAN",
+                             timestamp = now - 3000, messages = { { at = now - 3000, text = "hello" } } },
+                    Realm2only = { name = "Realm2only", status = "new", timestamp = now - 4000, note = "",
+                                   messages = { { at = now - 4000, text = "inv" } } },
+                },
+                team = { Prospect = { name = "Prospect", status = "trial", by = "Kumlust", at = now - 5000 } },
+                stats = { posts = { POST }, whispers = {} },
+                scoutSeen = { Shammy = now - 9000 },
+            },
+            [R6] = {   -- the older split: a different spelling of the realm, weeks back
+                discord = "discord.gg/old", needs = needs({ druid = { balance = 1 } }), needsAt = now - 10 * 86400,
+                needsBy = "Oldofficer", raidTimes = { sunday = "5pm" }, preText = "old pre",
+                responders = { Realm6only = { name = "Realm6only", status = "new", timestamp = now - 60000,
+                                              note = "", messages = { { at = now - 60000, text = "where bud?" } } } },
+                team = { Prospect = { name = "Prospect", status = "contacted", by = "Grunt", at = now - 90000 },
+                         Other6 = { name = "Other6", status = "invited", by = "Grunt", at = now - 70000 } },
+                -- the same post as R2's, its own table (as a save file makes it), and one more
+                stats = { posts = { { at = POST.at, where = POST.where, tpl = POST.tpl, whispers = POST.whispers,
+                                      chatType = POST.chatType, target = POST.target },
+                                    { at = now - 80000, where = "General", tpl = "Short",
+                                    whispers = 0, chatType = "CHANNEL", target = 1 } }, whispers = {} },
+                scoutSeen = { Shammy = now - 99999, Druidy = now - 50000 },
+            },
+            ["Alt Guild-Dreamscythe"] = { discord = "discord.gg/altguild",
+                responders = { Altrecruit = { name = "Altrecruit", status = "new", timestamp = now, messages = {} } } },
+            ["-"] = { discord = "", responders = {} },
+        },
+    }
+    H.eq(Login(save, "The Heathens"), false, "(no realm) the guild is not known at first: nothing settled, nothing joined")
+    local db = NS.db
+    H.ok(F.Ready(), "(no realm) the roster says the guild: the fence opens")
+    H.eq(db.guildKey, "The Heathens", "(no realm) the key is the guild's name alone")
+    H.eq(db.discord, "discord.gg/heathens", "(no realm) the real Discord is live again, not the bug's empty one")
+    H.ok(NS.Message:Build():find("discord.gg/heathens", 1, true), "(no realm) and the ad says it", NS.Message:Build())
+    H.eq(db.needs.shaman.resto, 2, "(no realm) the needs with the newest officer stamp")
+    H.ok(db.needsAt == now - 86400 and db.needsBy == "Officerton", "(no realm) with that stamp and who set it")
+    H.eq(db.needs.druid.balance, 0, "(no realm) the older split's needs lost to the newer stamp")
+    H.eq(db.raidTimes.tuesday, "8pm", "(no realm) the raid times of the newest book that had any")
+    H.eq(db.raidTimes.monday, "", "(no realm) every day still there")
+    H.ok(db.preText == "lf raiders" and db.postText == "SSC/TK" and db.customText == "my own words",
+         "(no realm) pre, post and the custom text: the real book's, not the defaults")
+    H.ok(db.responders.Afterbug and db.responders.Realm2only and db.responders.Realm6only,
+         "(no realm) the desk: everybody from all three books")
+    H.eq(db.responders.Both.status, "contacted", "(no realm) one person on two desks: a whisper since does not undo 'contacted'")
+    H.eq(db.responders.Both.note, "good healer", "(no realm) ...keeps the note")
+    H.eq(db.responders.Both.class, "SHAMAN", "(no realm) ...and the class")
+    H.eq(#db.responders.Both.messages, 2, "(no realm) ...and both messages")
+    H.eq(db.responders.Both.messages[2].text, "me again", "(no realm) ...oldest first")
+    H.eq(db.responders.Both.timestamp, now - 30, "(no realm) ...and the newest time, so the queue sorts it right")
+    H.eq(db.team.Prospect.status, "trial", "(no realm) the guild's list: the newer word about a prospect")
+    H.ok(db.team.Other6 ~= nil, "(no realm) ...and everybody from both")
+    H.eq((T.Prospect("Prospect")), true, "(no realm) the crest knows the prospect again")
+    H.eq(#db.stats.posts, 2, "(no realm) stats: the same post in two books counts once")
+    H.eq(db.stats.posts[1].at, now - 7200, "(no realm) ...newest first")
+    H.eq(NS.Stats.Summary().whispers, 2, "(no realm) ...and its whispers are not added up twice")
+    H.ok(db.scoutSeen.Shammy == now - 9000 and db.scoutSeen.Druidy == now - 50000,
+         "(no realm) scout cards: everybody, the latest time")
+    H.eq(F.joined, 3, "(no realm) three books joined")
+    for k in pairs(db.guilds) do
+        H.ok(not F.Realmed(k, "The Heathens"), "(no realm) no realm-days book of this guild left in the parked books", k)
+    end
+    local aside = db.guildsWithRealm
+    H.ok(type(aside) == "table" and count(aside) == 3, "(no realm) all three moved aside, not deleted", tostring(count(aside)))
+    H.ok(aside[R2] and aside[R2].discord == "discord.gg/heathens" and aside[R2].responders.Both.status == "contacted",
+         "(no realm) ...each as it was")
+    H.ok(aside[R6] and aside["The Heathens-?"] and aside["The Heathens-?"].responders.Afterbug,
+         "(no realm) ...the old split and the bug's own book too")
+    H.ok(db.guilds["Alt Guild-Dreamscythe"] and db.guilds["Alt Guild-Dreamscythe"].discord == "discord.gg/altguild",
+         "(no realm) another guild's book is not touched")
+    H.ok(db.guilds["-"] ~= nil, "(no realm) nor the no-guild book")
+    H.eq(db.guilds["The Heathens"], nil, "(no realm) the live book is not also parked")
+
+    H.section("no realm: it runs once")
+    local responders, posts = count(db.responders), #db.stats.posts
+    _G.NebbinatorDB = db
+    Login(db, "The Heathens")
+    H.eq(F.Gather(NS.db, "The Heathens"), 0, "(once) the next login finds nothing to join")
+    H.ok(count(NS.db.responders) == responders and #NS.db.stats.posts == posts and count(NS.db.guildsWithRealm) == 3,
+         "(once) nothing doubled, nothing moved again")
+    H.eq(NS.db.discord, "discord.gg/heathens", "(once) the book still live")
+
+    H.section("no realm: the alt in the other guild gets its own book, joined the same way")
+    Login(NS.db, "Alt Guild")
+    H.eq(NS.db.guildKey, "Alt Guild", "(alt) its guild's name alone")
+    H.eq(NS.db.discord, "discord.gg/altguild", "(alt) its own Discord from its realm-days book")
+    H.ok(NS.db.responders.Altrecruit and not NS.db.responders.Afterbug and not NS.db.responders.Realm2only,
+         "(alt) its own desk, none of the main's")
+    H.ok(NS.db.guilds["The Heathens"] and NS.db.guilds["The Heathens"].discord == "discord.gg/heathens",
+         "(alt) the main's joined book parked under the name alone")
+    H.ok(NS.db.guildsWithRealm["Alt Guild-Dreamscythe"] ~= nil and NS.db.guilds["Alt Guild-Dreamscythe"] == nil,
+         "(alt) its old book moved aside too")
+    Login(NS.db, "The Heathens")
+    H.ok(NS.db.discord == "discord.gg/heathens" and NS.db.responders.Realm6only, "(alt) back on the main: all of it there")
+
+    H.section("no realm: words typed into the bug's book since are kept")
+    Login({ dbVersion = 5, guildKey = "Keepers-?", discord = "discord.gg/typed-today", preText = "",
+            guilds = { ["Keepers-Somerealm"] = { discord = "discord.gg/before", preText = "before pre",
+                                                  content = "dungeons" } } }, "Keepers")
+    H.eq(NS.db.discord, "discord.gg/typed-today", "(typed) a Discord set after the split stays")
+    H.eq(NS.db.preText, "before pre", "(typed) what was not touched since comes back from the real book")
+    H.eq(NS.db.content, "dungeons", "(typed) ...every word of it")
+
+    H.section("no realm: a guild name with pattern characters, and names that only begin alike")
+    Login({ dbVersion = 5, guildKey = "-",
+            guilds = { ["100% [Raid]-Realm One"] = { discord = "discord.gg/pct" },
+                       ["100-Realm"] = { discord = "discord.gg/hundred" },
+                       ["The-Realm"] = { discord = "discord.gg/the" } } }, "100% [Raid]")
+    H.eq(NS.db.discord, "discord.gg/pct", "(names) % [ ] in the name: still its own book")
+    H.ok(NS.db.guilds["100-Realm"] and NS.db.guilds["The-Realm"], "(names) guild 100 and guild The are other guilds")
+    Login(NS.db, "The")
+    H.eq(NS.db.discord, "discord.gg/the", "(names) guild The takes only its own")
+    H.ok(NS.db.guilds["100% [Raid]"] and NS.db.guilds["100-Realm"], "(names) and nothing of the others")
+    H.eq(F.Realmed("The Heathens-X", "The"), false, "(names) 'The' is not 'The Heathens'")
+
+    H.section("no realm: a new install and an untouched save stay as they are")
+    Login(nil, "The Heathens")
+    H.eq(NS.db.guildKey, "The Heathens", "(new) the first book is the guild's name")
+    H.ok(NS.db.guildsWithRealm == nil and next(NS.db.guilds) == nil, "(new) nothing parked, nothing moved aside")
+    H.eq(NS.db.discord, "", "(new) a fresh book")
+    Login({ dbVersion = 5, guildKey = "The Heathens", discord = "discord.gg/heathens",
+            guilds = { ["Alt Guild"] = { discord = "discord.gg/altguild" } } }, "The Heathens")
+    H.ok(NS.db.guildsWithRealm == nil and NS.db.discord == "discord.gg/heathens" and NS.db.guilds["Alt Guild"],
+         "(untouched) a save already keyed by name: nothing moves")
+    Login(NS.db, nil)
+    H.eq(NS.db.guildKey, "-", "(untouched) no guild: the '-' book, as before")
+    H.ok(NS.db.guildsWithRealm == nil, "(untouched) and still nothing moved aside")
+
+    H.myGuild = "The Heathens"
+    _G.NebbinatorDB, NS.db = keepSaved, keepDB
+    F.ready = false
+    F.Settle()
 end)()
 
 ;(function()

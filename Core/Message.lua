@@ -152,7 +152,9 @@ function M:Tokens()
         -- whisper reaches, and Forever's UnitName is the first name alone. Hidden by the game: empty.
         player         = U.WholeName("player") or "",
         level          = tostring(UnitLevel("player") or ""),
-        realm          = GetRealmName() or "",
+        -- "" on Forever since 21 Nov 2026 (realm names hidden from addons, for good). Kept so an old template's
+        -- {realm} vanishes instead of printing raw; Render tidies a dash or brackets left around it. Off the help list.
+        realm          = U.Trim(not U.Hidden(GetRealmName()) and GetRealmName() or ""),
         faction        = UnitFactionGroup("player") or "",
         tanks          = tostring(tanks),
         healers        = tostring(healers),
@@ -181,12 +183,16 @@ end
 NS.TOKEN_HELP = {
     "{needs}", "{needs:short}", "{times}", "{times:full}", "{guild}",
     "{discord}", "{content}", "{tanks}", "{healers}", "{dps}", "{total}",
-    "{pre}", "{post}", "{player}", "{level}", "{realm}", "{faction}", "{nextraid}",
+    "{pre}", "{post}", "{player}", "{level}", "{faction}", "{nextraid}",
 }
 
 --------------------------------------------------------------------
 -- Rendering
 --------------------------------------------------------------------
+
+-- Tokens that are empty for everybody and that nobody can fill in: never reported as "empty: ..." (every post
+-- would say "empty: {realm}" since Forever hid the realm, 21 Nov 2026).
+M.SILENT = { realm = true }
 
 -- Replaces tokens, then tidies the punctuation left behind by empty ones
 -- so "Discord: {discord}." never renders as "Discord: ."
@@ -197,12 +203,17 @@ function M:Render(template)
     local text = tostring(template or ""):gsub("{([%w:]+)}", function(key)
         local value = tokens[key:lower()]
         if value == nil then return "{" .. key .. "}" end
-        if value == "" then missing[key:lower()] = true end
+        if value == "" and not M.SILENT[key:lower()] then missing[key:lower()] = true end
         return value
     end)
 
     text = text:gsub("%s+", " ")
     text = text:gsub("[%(%[]%s*[%)%]]", "")
+    -- an empty token between two dashes ("<{guild}> - {realm} - raids") leaves one dash, and one at the very
+    -- start goes (21 Nov 2026, {realm} is always empty now). A word in front of it ("on {realm}") stays: the
+    -- token help no longer offers {realm}.
+    text = text:gsub(" %- %- ", " - ")
+    text = text:gsub("^%s*[:,;%-]%s*", "")
     text = text:gsub("%s*([:,;])%s*([%.!,])", "%2")
     text = text:gsub("([:,;-])%s*$", "")
     text = text:gsub("%s+([%.,!%?])", "%1")
