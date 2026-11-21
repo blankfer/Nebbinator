@@ -217,7 +217,10 @@ local function newFrame(ftype, name, parent)
     function fr:UnregisterAllEvents() self._events = {} end
     function fr:Fire(script, ...) local fn = self._scripts[script]; if fn then return fn(self, ...) end end
     -- a button the client was never told to hear the right button on ignores a right-click (default: LeftButtonUp)
+    -- EnableMouse(false): the client never delivers a click to it (21 Nov 2026 - a SetScript("OnClick") replaces
+    -- the kit's own enabled check, so only the mouse being off keeps a greyed button from working)
     function fr:Click(button)
+        if self._mouse == false then return end
         button = button or "LeftButton"
         if button ~= "LeftButton" and self._type == "Button" then
             local hears = false
@@ -416,17 +419,22 @@ end
 H.resting = true
 _G.IsResting = function() return H.resting end
 _G.UnitLevel = function() return 70 end
-_G.GetRealmName = function() return "Dreamscythe" end
+-- NO REALM (Forever 1.60.1 Live Update 2, 21 Nov 2026, permanent): "APIs that return realm names or IDs now
+-- instead return an empty string or zero in-place of those values. This includes - but is not limited to -
+-- GetRealmName, GetRealmID, and C_BattleNet APIs." The mock said "Dreamscythe" and the guild book's key split
+-- in the client while the suite stayed green. Empty, like the client.
+_G.GetRealmName = function() return "" end
 _G.UnitFactionGroup = function() return "Alliance" end
 -- nil for a groupmate without a guild (the client's answer), ours for the player and any other unit
 -- H.myGuild: this character's guild (nil = none); H.guildLate: in one, but the game has not said which yet
--- (the client answers nil for a few seconds after login). H.myGuildRealm: a guild from another realm.
+-- (the client answers nil for a few seconds after login). The 4th return, the guild's realm, is "" since
+-- 21 Nov 2026 (the same change) - whatever realm the guild is on.
 H.myGuild = "The Heathens"
 _G.GetGuildInfo = function(unit)
     local m = unit and unit ~= "player" and H.Member(unit)
     if m then return m.guild end
     if not H.myGuild or H.guildLate then return nil end
-    return H.myGuild, "Member", 4, H.myGuildRealm
+    return H.myGuild, "Member", 4, ""
 end
 _G.IsInGuild = function() return H.myGuild ~= nil end
 -- the roster: name-realm, rank name, rank index (0 = guild master) - as the client answers

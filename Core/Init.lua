@@ -101,9 +101,10 @@ local function Defaults()
             { label = "Signups",    text = "Sign ups are a must. If you cant make it no worries but ALWAYS sign up" },
         },
 
-        -- {name} is the responder; {realm} and {region} fill themselves in.
         -- {name} is the responder; {realm} and {region} come from the client (21 Oct 2026: it said us and
         -- dreamscythe for everybody). Warcraft Logs' Forever address is UNVERIFIED - it is a setting.
+        -- Since 21 Nov 2026 the client never says the realm (""): with {realm} in it the address is not built and
+        -- the Logs button greys out, saying to write the realm into the address by hand (Responders R.NO_REALM).
         logsUrl = "https://fresh.warcraftlogs.com/character/{region}/{realm}/{name}",
 
         leadFinder = false,        -- watch channels for "LF guild" posts
