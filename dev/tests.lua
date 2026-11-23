@@ -2835,4 +2835,72 @@ end)()
     _G.NebbinatorDB, NS.db = keepSaved, keepDB
 end)()
 
+-- THE DESK ON THE PHONE (UI/DeckApp.lua, 22 Nov 2026 - Arn: "start nebbinator")
+;(function()
+    local A = NS.DeckApp
+    local defs, opened, dirty = {}, nil, 0
+    local keepDeck, keepResp, keepPrev, keepTime = _G.BiSTheme and _G.BiSTheme.Deck, NS.db.responders, NS.db.preview, _G.time
+    _G.BiSTheme = _G.BiSTheme or {}
+    A.handle = nil
+    _G.BiSTheme.Deck = { Register = function(d) d.id = d.owner .. ":" .. d.key defs[d.id] = d return { Dirty = function() dirty = dirty + 1 end } end,
+        Open = function(id) opened = id return true end }
+    H.ok(A.Register() == true and A.Register() == false, "(phone) it registers with the phone, once")
+    local def = defs["Nebbinator:desk"]
+    local p, c = def.page, def.card
+    local T = 2000000000
+    _G.time = function() return T end
+    NS.db.responders = {
+        ["Zugzug Bonecrush"] = { name = "Zugzug Bonecrush", status = "new", class = "SHAMAN", level = 52, guild = "No guild", timestamp = T - 120,
+            messages = { { text = "saw your ad, resto here", at = T - 120 } } },
+        ["Big Dent"] = { name = "Big Dent", status = "trial", class = "WARRIOR", level = 60, timestamp = T - 7200, messages = {} },
+    }
+    -- DESK
+    local r = p.rows(1)
+    H.ok(#r == 2 and r[1].text == "Zugzug Bonecrush" and r[1].tint == "SHAMAN" and r[1].sub:find("saw your ad", 1, true) and r[1].right:find("^NEW") and r[1].ink == "gold",
+         "(phone) DESK: newest first, in their class, their last words under the name, NEW in gold", r[1] and r[1].right)
+    H.ok(p.boxes(1)[1][2] == 1 and p.boxes(1)[4][2] == 1, "(phone) its boxes: new, trial")
+    H.ok(p.big(1).word == "REPLY TO ZUGZUG", "(phone) the big button: reply to the newest", p.big(1).word)
+    -- a recruit's page
+    p.big(1).fn()
+    local rr = p.rows(1)
+    local reply
+    for _, x in ipairs(rr) do if x.verb == "SEND" and x.sub then reply = x break end end
+    H.ok(p.title() == "Zugzug Bonecrush" and rr[1].text == "Back" and rr[3].text == "saw your ad, resto here" and reply, "(phone) their page: their words, your ready answers")
+    local before = #H.sent
+    NS.db.preview = false
+    reply.act.fn()
+    H.ok(#H.sent > before and H.sent[#H.sent].chatType == "WHISPER" and NS.db.responders["Zugzug Bonecrush"].status == "contacted", "(phone) SEND whispers it, and they are talked to")
+    H.ok(p.big(1).word == "INVITE TO THE GUILD", "(phone) INVITE TO THE GUILD")
+    p.big(1).fn()
+    H.ok(H.guildInvited == "Zugzug Bonecrush" and NS.db.responders["Zugzug Bonecrush"].status == "invited", "(phone) the guild invite, as the desk's own")
+    rr = p.rows(1)
+    rr[1].act.fn()
+    H.ok(p.title() == "Nebbinator", "(phone) Back: the desk")
+    -- AD: where it can go, one click one channel
+    local ad = p.rows(2)
+    H.ok(#ad > 0 and ad[1].verb == "POST" and ad[1].act, "(phone) AD: each channel with POST", ad[1] and ad[1].text)
+    before = #H.sent
+    ad[1].act.fn()
+    H.ok(#H.sent == before + 1, "(phone) one click posts one part to one channel")
+    H.ok(p.rows(2)[1].verb ~= "POST" or p.rows(2)[1].verb == "2/2", "(phone) then it waits (or the next part)")
+    H.ok(type(p.text(2)) == "string", "(phone) the ad as it will post")
+    -- the card
+    NS.db.responders["Zugzug Bonecrush"].status = "new"
+    H.ok(c.prio() == 7 and c.lines()[1] == "NEW RECRUIT" and c.lines()[3]:find("Zugzug Bonecrush, 52 shaman", 1, true) and c.buttons()[1].word == "REPLY", "(phone) NEW RECRUIT")
+    c.buttons()[1].fn()
+    H.ok(opened == "Nebbinator:desk" and p.title() == "Zugzug Bonecrush", "(phone) REPLY opens them on the phone")
+    A.Open(nil)
+    NS.db.responders["Zugzug Bonecrush"].status = "declined"
+    H.ok(c.prio() == nil, "(phone) nobody new: no card")
+    -- the desk changed: the phone is told
+    dirty = 0
+    NS.UI:OnDataChanged()
+    H.ok(dirty > 0, "(phone) a desk change repaints the phone")
+    -- every tab, empty desk, no error
+    NS.db.responders = {}
+    for tab = 1, 4 do for _, f in ipairs({ "rows", "boxes", "text", "say", "big", "keys" }) do H.ok(pcall(p[f], tab), "(phone) empty, tab " .. tab .. " " .. f) end end
+    NS.db.responders, NS.db.preview, _G.time = keepResp, keepPrev, keepTime
+    _G.BiSTheme.Deck = keepDeck
+end)()
+
 H.report()
